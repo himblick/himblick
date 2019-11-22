@@ -1,0 +1,30 @@
+#!/usr/bin/python3
+import sys
+import argparse
+import logging
+
+log = logging.getLogger()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Raspberry PI Smart Signage box setup tool")
+    subparsers = parser.add_subparsers(help="sub-command help", dest="command")
+
+    from himblib.sd import SD
+    SD.make_subparser(subparsers)
+
+    args = parser.parse_args()
+    if args.command is None:
+        parser.print_help()
+    else:
+        handler = args.handler(args)
+        return handler.run()
+
+
+if __name__ == "__main__":
+    from himblib.cmdline import Fail
+    try:
+        sys.exit(main())
+    except Fail as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
