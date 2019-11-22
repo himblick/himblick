@@ -3,6 +3,10 @@ import logging
 import os
 import tempfile
 import sys
+try:
+    import progressbar
+except ModuleNotFoundError:
+    progressbar = None
 
 log = logging.getLogger(__name__)
 
@@ -37,13 +41,40 @@ class atomic_writer(object):
         return False
 
 
+class NullProgressBar:
+    def update(self, val):
+        pass
+
+    def __call__(self, val):
+        return val
+
+
+def make_progressbar(maxval=None):
+    if progressbar is None:
+        log.warn("install python3-progressbar for a fancier progressbar")
+        return NullProgressBar()
+
+    if not os.isatty(sys.stdout.fileno()):
+        return NullProgressBar()
+
+    if maxval is None:
+        # TODO: not yet implemented
+        return NullProgressBar()
+    else:
+        return progressbar.ProgressBar(maxval=maxval, widgets=[
+            progressbar.Timer(), " ",
+            progressbar.Bar(), " ",
+            progressbar.SimpleProgress(), " ",
+            progressbar.FileTransferSpeed(), " ",
+            progressbar.Percentage(), " ",
+            progressbar.AdaptiveETA(),
+        ])
+
+
 def progress(lst):
     if os.isatty(sys.stdout.fileno()):
-        try:
-            import progressbar
-        except ModuleNotFoundError:
+        if progressbar is None:
             log.warn("install python3-progressbar for a fancier progressbar")
-            progressbar = None
 
         total = len(lst)
         if progressbar:

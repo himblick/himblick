@@ -2,6 +2,8 @@ from .cmdline import Command, Fail
 import subprocess
 import json
 import logging
+import os
+from .utils import make_progressbar
 
 log = logging.getLogger(__name__)
 
@@ -17,6 +19,8 @@ class SD(Command):
                             help="locate the device where the SD image is present")
         parser.add_argument("--umount", action="store_true",
                             help="unmount all partitions for the SD device")
+        parser.add_argument("--write-image", action="store_true",
+                            help="write the filesystem image to the SD device")
         return parser
 
     def locate(self):
@@ -42,6 +46,24 @@ class SD(Command):
                 continue
             subprocess.run(["umount", mp], check=True)
 
+    def write_image(self, dev):
+        chunksize = 16 * 1024 * 1024
+        pbar = make_progressbar(maxval=os.path.getsize(self.settings.BASE_IMAGE))
+        total_read = 0
+        with open(self.settings.BASE_IMAGE, "rb") as fdin:
+            with open(dev["path"], "wb") as fdout:
+                pbar.start()
+                while True:
+                    buf = fdin.read(chunksize)
+                    if not buf:
+                        break
+                    total_read += len(buf)
+                    pbar.update(total_read)
+                    fdout.write(buf)
+                    fdout.flush()
+                    os.fdatasync(fdout.fileno())
+                pbar.finish()
+
     def run(self):
         """
         Set up an imblick private image
@@ -51,6 +73,9 @@ class SD(Command):
         elif self.args.umount:
             dev = self.locate()
             self.umount(dev)
+        elif self.args.write_image:
+            dev = self.locate()
+            self.umount(dev)
+            self.write_image(dev)
         else:
             raise Fail("No command given: try --help")
-
