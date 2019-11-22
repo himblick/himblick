@@ -15,6 +15,8 @@ class SD(Command):
         parser = super().make_subparser(subparsers)
         parser.add_argument("--locate", action="store_true",
                             help="locate the device where the SD image is present")
+        parser.add_argument("--umount", action="store_true",
+                            help="unmount all partitions for the SD device")
         return parser
 
     def locate(self):
@@ -23,7 +25,7 @@ class SD(Command):
         devs = []
         for dev in res["blockdevices"]:
             if dev["rm"] and not dev["ro"] and dev["type"] == "disk" and dev["tran"] == "usb":
-                devs.append(dev["path"])
+                devs.append(dev)
                 log.info("Found %s: %s %s %s %.3fGB",
                          dev["path"], dev["vendor"], dev["model"], dev["serial"],
                          int(dev["size"]) / (1024**3))
@@ -33,12 +35,22 @@ class SD(Command):
             raise Fail(f"{len(devs)} SD cards found")
         return devs[0]
 
+    def umount(self, dev):
+        for part in dev["children"]:
+            mp = part["mountpoint"]
+            if not mp:
+                continue
+            subprocess.run(["umount", mp], check=True)
+
     def run(self):
         """
         Set up an imblick private image
         """
         if self.args.locate:
-            print(self.locate())
+            print(self.locate()["path"])
+        elif self.args.umount:
+            dev = self.locate()
+            self.umount(dev)
         else:
             raise Fail("No command given: try --help")
 
