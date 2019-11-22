@@ -1,9 +1,11 @@
 from .cmdline import Command, Fail
+from contextlib import contextmanager
 import subprocess
 import json
 import logging
 import os
 import tempfile
+import importlib.resources
 from .utils import make_progressbar
 
 log = logging.getLogger(__name__)
@@ -28,7 +30,7 @@ class SD(Command):
                             help="write the filesystem image to the SD device")
         parser.add_argument("--partition", action="store_true",
                             help="update the partition layout")
-        parser.add_argument("--setup-system", action="store_true",
+        parser.add_argument("--setup", action="store_true",
                             help="set up the system partition")
         return parser
 
@@ -130,54 +132,66 @@ class SD(Command):
                 raise Fail("SD media partition exFAT file system failed checks:"
                            " reset it with --write-image and rerun --partition")
 
-    def setup_system(self):
-        part = self.locate_partition("rootfs")
+    @contextmanager
+    def mounted(self, label):
+        part = self.locate_partition(label)
         if part["mountpoint"] is None:
-            log.info("Mounting rootfs partition %s", part["path"])
+            log.info("Mounting %s partition %s", label, part["path"])
             subprocess.run(["udisksctl", "mount", "-b", part["path"]], stdout=subprocess.DEVNULL, check=True)
-            part = self.locate_partition("rootfs")
+            part = self.locate_partition(label)
 
-        root = part["mountpoint"]
-        # Vars to pass to the ansible playbook
-        playbook_vars = {}
-        print(root)
-
-        with tempfile.TemporaryDirectory() as workdir:
-            ansible_inventory = os.path.join(workdir, "inventory.ini")
-            with open(ansible_inventory, "wt") as fd:
-                print("[rootfs]", file=fd)
-                print("{} ansible_connection=chroot {}".format(
-                        os.path.abspath(root),
-                        " ".join("{}={}".format(k, v) for k, v in playbook_vars.items())),
-                      file=fd)
-
-            ansible_cfg = os.path.join(workdir, "ansible.cfg")
-            with open(ansible_cfg, "wt") as fd:
-                print("[defaults]", file=fd)
-                print("nocows = 1", file=fd)
-                print("inventory = {}".format(os.path.abspath(ansible_inventory)), file=fd)
-
-            env = dict(os.environ)
-            env["ANSIBLE_CONFIG"] = ansible_cfg
-            subprocess.run(["ansible", "all", "-m", "setup"], env=env, check=True)
-            # args = ["ansible-playbook", "-v", os.path.abspath(sysdesc.playbook)]
-            # ansible_sh = os.path.join(workdir, "ansible.sh")
-            # with open(ansible_sh, "wt") as fd:
-            #     print("#!/bin/sh", file=fd)
-            #     print("set -xue", file=fd)
-            #     print("export ANSIBLE_CONFIG={}".format(shlex.quote(ansible_cfg)), file=fd)
-            #     print(" ".join(shlex.quote(x) for x in args), file=fd)
-            # os.chmod(ansible_sh, 0o755)
-#
-#            res = self._run_ansible([ansible_sh])
-#            if res.result != 0:
-#                self.log.warn("Rerunning ansible to check what fails")
-#                self._run_ansible([ansible_sh])
-#                raise RuntimeError("ansible exited with result {}".format(res.result))
-#            else:
-#                return res.changed == 0 and res.unreachable == 0 and self.failed == 0
+        yield part["mountpoint"]
 
         subprocess.run(["udisksctl", "unmount", "-b", part["path"]], stdout=subprocess.DEVNULL, check=True)
+
+    def setup_boot(self):
+        with self.mounted("boot") as root:
+            # Create an empty 'ssh' file to enable sshd
+            with open(os.path.join(root, "ssh"), "wb"):
+                pass
+
+    def setup_rootfs(self):
+        with self.mounted("rootfs") as root:
+            # Vars to pass to the ansible playbook
+            playbook_vars = {}
+
+            with tempfile.TemporaryDirectory() as workdir:
+                ansible_inventory = os.path.join(workdir, "inventory.ini")
+                with open(ansible_inventory, "wt") as fd:
+                    print("[rootfs]", file=fd)
+                    print("{} ansible_connection=chroot {}".format(
+                            os.path.abspath(root),
+                            " ".join("{}={}".format(k, v) for k, v in playbook_vars.items())),
+                          file=fd)
+
+                ansible_cfg = os.path.join(workdir, "ansible.cfg")
+                with open(ansible_cfg, "wt") as fd:
+                    print("[defaults]", file=fd)
+                    print("nocows = 1", file=fd)
+                    print("inventory = {}".format(os.path.abspath(ansible_inventory)), file=fd)
+
+                env = dict(os.environ)
+                env["ANSIBLE_CONFIG"] = ansible_cfg
+
+                with importlib.resources.path("himblib", "rootfs.yaml") as playbook:
+                    # subprocess.run(["ansible", "all", "-m", "setup"], env=env, check=True)
+                    subprocess.run(["ansible-playbook", "-v", playbook], env=env, check=True)
+                # args = ["ansible-playbook", "-v", os.path.abspath(sysdesc.playbook)]
+                # ansible_sh = os.path.join(workdir, "ansible.sh")
+                # with open(ansible_sh, "wt") as fd:
+                #     print("#!/bin/sh", file=fd)
+                #     print("set -xue", file=fd)
+                #     print("export ANSIBLE_CONFIG={}".format(shlex.quote(ansible_cfg)), file=fd)
+                #     print(" ".join(shlex.quote(x) for x in args), file=fd)
+                # os.chmod(ansible_sh, 0o755)
+    #
+    #            res = self._run_ansible([ansible_sh])
+    #            if res.result != 0:
+    #                self.log.warn("Rerunning ansible to check what fails")
+    #                self._run_ansible([ansible_sh])
+    #                raise RuntimeError("ansible exited with result {}".format(res.result))
+    #            else:
+    #                return res.changed == 0 and res.unreachable == 0 and self.failed == 0
 
     def run(self):
         """
@@ -196,7 +210,8 @@ class SD(Command):
             dev = self.locate()
             self.umount(dev)
             self.partition(dev)
-        elif self.args.setup_system:
-            self.setup_system()
+        elif self.args.setup:
+            self.setup_boot()
+            self.setup_rootfs()
         else:
             raise Fail("No command given: try --help")

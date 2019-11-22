@@ -1,0 +1,40 @@
+---
+- hosts: all
+  # roles:
+  #  - live
+  tasks:
+   - name: "Disable ssh password authentication"
+     lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '\bPasswordAuthentication\b'
+        line: 'PasswordAuthentication no'
+
+   - name: "Install exfat drivers"
+     apt:
+        name: exfat-fuse,exfat-utils
+        state: present
+        update_cache: no
+
+   - name: "Create /srv directory"
+     file:
+        path: "/srv"
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+
+   - name: "Create /media mount point"
+     file:
+        path: "/srv/media"
+        state: directory
+        owner: pi
+        group: pi
+        mode: 0755
+
+   - name: "Configure mounting media directory"
+     mount:
+        src: /dev/disk/by-label/media
+        path: /srv/media
+        fstype: exfat
+        opts: uid=1000,gid=1000,fmask=113,dmask=007,rw,noatime
+        state: present
