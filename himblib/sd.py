@@ -87,6 +87,10 @@ class SD(Command):
             import parted
         except ModuleNotFoundError:
             raise Fail("please install python3-parted")
+
+        # See https://github.com/dcantrell/pyparted/tree/master/examples
+        # for pyparted examples
+
         device = parted.getDevice(dev["path"])
         disk = parted.newDisk(device)
 
@@ -97,34 +101,62 @@ class SD(Command):
         if len(partitions) > 3:
             raise Fail(f"SD card has too many ({len(partitions)}) partitions: reset it with --write-image")
 
-        fs = partitions[0].fileSystem
+        part_boot = partitions[0]
+        fs = part_boot.fileSystem
         if not fs:
             raise Fail("SD boot partition has no file system: reset it with --write-image")
         if fs.type != "fat32":
             raise Fail("SD boot partition is not a fat32 partition: reset it with --write-image")
 
-        fs = partitions[1].fileSystem
+        part_root = partitions[1]
+        fs = part_root.fileSystem
         if not fs:
             raise Fail("SD system partition has no file system: reset it with --write-image")
         if fs.type != "ext4":
-            raise Fail("SD boot partition is not an ext4 partition: reset it with --write-image")
+            raise Fail("SD system partition is not an ext4 partition: reset it with --write-image")
 
-        if len(partitions) == 2:
-            # Media partition to be created
+        target_root_size = int(round(4 * 1024**3 / device.sectorSize))
+        need_root_resize = part_root.geometry.end - part_root.geometry.start - 16 < target_root_size
+        log.info("%s: partition is only %.1fGB and needs resizing",
+                 part_root.path, target_root_size * device.sectorSize / 1024**3)
 
+        if len(partitions) == 3:
+            part_media = partitions[2]
+        else:
+            part_media = None
+
+        if need_root_resize:
+            if part_media:
+                log.info("%s: partition needs resize: removing media partition %s", part_root.path, part_media.path)
+                disk.deletePartition(part_media)
+                part_media = None
+
+            # Resize rootfs partition
+            constraint = device.optimalAlignedConstraint
+            constraint.minSize = target_root_size
+            constraint.maxSize = target_root_size
+            disk.maximizePartition(part_root, constraint)
+            disk.commit()
+
+            subprocess.run(["e2fsck", "-fy", part_root.path], check=True)
+            subprocess.run(["resize2fs", part_root.path], check=True)
+
+        if part_media is None:
             # Get the last free space
             free_space = disk.getFreeSpaceRegions()[-1]
+
+            # Create media partition
             partition = parted.Partition(
                     disk=disk,
                     type=parted.PARTITION_NORMAL,
                     geometry=free_space)
             disk.addPartition(partition=partition, constraint=device.optimalAlignedConstraint)
             disk.commit()
-            log.info("%s media partition created", format_gb(free_space.length))
+            log.info("%s media partition created", format_gb(free_space.length * device.sectorSize))
 
             # Create exFAT file system
             subprocess.run(["mkexfatfs", "-n", "media", partition.path], check=True)
-            log.info("%s media partition formatted", format_gb(free_space.length))
+            log.info("%s media partition formatted", format_gb(free_space.length * device.sectorSize))
         else:
             # Current parted cannot seem to deal with exfat, let's use exfatfsck instead
             res = subprocess.run(["exfatfsck", "-n", partitions[2].path], capture_output=True, check=False)
