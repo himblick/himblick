@@ -150,6 +150,22 @@ class SD(Command):
             with open(os.path.join(root, "ssh"), "wb"):
                 pass
 
+            netcfg = []
+            for essid, password in self.settings.WIFI_NETWORKS:
+                res = subprocess.run(["wpa_passphrase", essid], input=password + "\n",
+                                     capture_output=True, text=True, check=True)
+                for line in res.stdout.splitlines():
+                    if line.strip().startswith("#"):
+                        continue
+                    netcfg.append(line)
+            if netcfg:
+                with open(os.path.join(root, "wpa_supplicant.conf"), "wt") as fd:
+                    print("ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev", file=fd)
+                    print("update_config=1", file=fd)
+                    print("country=de", file=fd)
+                    for line in netcfg:
+                        print(line, file=fd)
+
     def setup_rootfs(self):
         with self.mounted("rootfs") as root:
             # Vars to pass to the ansible playbook
