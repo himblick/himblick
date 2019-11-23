@@ -30,7 +30,7 @@ class SD(Command):
                             help="write the filesystem image to the SD device")
         parser.add_argument("--partition", action="store_true",
                             help="update the partition layout")
-        parser.add_argument("--setup", action="store_true",
+        parser.add_argument("--setup", action="store", nargs="?", const="all",
                             help="set up the system partition")
         return parser
 
@@ -211,7 +211,9 @@ class SD(Command):
             self.umount(dev)
             self.partition(dev)
         elif self.args.setup:
-            self.setup_boot()
-            self.setup_rootfs()
+            if self.args.setup in ("boot", "all"):
+                self.setup_boot()
+            if self.args.setup in ("rootfs", "all"):
+                self.setup_rootfs()
         else:
             raise Fail("No command given: try --help")
