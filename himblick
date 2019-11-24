@@ -16,6 +16,9 @@ def main():
     from himblib.wifi_setup import WifiSetup
     WifiSetup.make_subparser(subparsers)
 
+    from himblib.player import Player
+    Player.make_subparser(subparsers)
+
     args = parser.parse_args()
     if args.command is None:
         parser.print_help()
