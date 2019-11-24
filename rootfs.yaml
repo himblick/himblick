@@ -54,6 +54,7 @@
          - openbox
          - omxplayer
          - okular
+         - lightdm
         state: present
         update_cache: no
         install_recommends: no
