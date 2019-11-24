@@ -2,13 +2,8 @@
 - hosts: all
   roles:
    - raspbian_clean
+   - base
   tasks:
-   - name: "Disable ssh password authentication"
-     lineinfile:
-        path: /etc/ssh/sshd_config
-        regexp: '\bPasswordAuthentication\b'
-        line: 'PasswordAuthentication no'
-
    - name: "Install exfat drivers"
      apt:
         name: exfat-fuse,exfat-utils

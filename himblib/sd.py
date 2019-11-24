@@ -383,7 +383,10 @@ class SD(Command):
             shutil.copytree("roles", os.path.join(ansible_dir, "roles"))
 
             # Vars to pass to the ansible playbook
-            playbook_vars = {}
+            playbook_vars = {
+                "KEYBOARD_LAYOUT": self.settings.KEYBOARD_LAYOUT,
+                "TIMEZONE": self.settings.TIMEZONE,
+            }
 
             ansible_inventory = os.path.join(ansible_dir, "inventory.ini")
             with open(ansible_inventory, "wt") as fd:

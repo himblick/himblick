@@ -1,0 +1,25 @@
+---
+ - name: "install keyboard-configuration"
+   apt:
+     name: keyboard-configuration
+     state: present
+
+ - name: "write keyboard configration"
+   lineinfile:
+     dest: /etc/default/keyboard
+     state: present
+     regexp: "^XKBLAYOUT="
+     line: "XKBLAYOUT={{KEYBOARD_LAYOUT}}"
+   notify:
+     - "dpkg-reconfigure keyboard-configuration"
+
+ - name: "set timezone"
+   timezone:
+     name: "{{TIMEZONE}}"
+
+ - name: "Disable ssh password authentication"
+   lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '\bPasswordAuthentication\b'
+      line: 'PasswordAuthentication no'
+
