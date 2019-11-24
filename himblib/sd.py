@@ -241,6 +241,15 @@ class SD(Command):
             elif os.path.exists(wifi_config):
                 os.unlink(wifi_config)
 
+            # Remove ' init=/usr/lib/raspi-config/init_resize.sh' from cmdline.txt
+            cmdline = os.path.join(root, "cmdline.txt")
+            with open(cmdline, "rt") as fd:
+                content = fd.read()
+            fixed = content.replace(" init=/usr/lib/raspi-config/init_resize.sh", "")
+            if fixed != content:
+                with open(cmdline, "wt") as fd:
+                    fd.write(fixed)
+
     def save_apt_cache(self, rootfs_mountpoint: str):
         """
         Copy .deb files from the apt cache in the rootfs to our local cache
