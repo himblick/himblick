@@ -8,7 +8,7 @@ import logging
 import os
 import shlex
 import shutil
-import importlib.resources
+import time
 from .utils import make_progressbar
 
 log = logging.getLogger(__name__)
@@ -25,6 +25,7 @@ class Cache:
     def get(self, name):
         res = os.path.join(self.root, name)
         os.makedirs(res, exist_ok=True)
+        return res
 
 
 class SD(Command):
@@ -286,6 +287,11 @@ class SD(Command):
                     content = content.replace("${PLATFORM}", "aarch64")
                     with open(ld_so_preload, "wt") as fd:
                         fd.write(content)
+
+            # Update apt cache
+            apt_cache = os.path.join(root, "var", "cache", "apt", "pkgcache.bin")
+            if not os.path.exists(apt_cache) or time.time() - os.path.getmtime(apt_cache) > 86400:
+                subprocess.run(["systemd-nspawn", "-D", root, "apt", "update"], check=True)
 
             # Make sure ansible is installed in the chroot
             subprocess.run(["systemd-nspawn", "-D", root, "apt", "-y", "install", "ansible"], check=True)

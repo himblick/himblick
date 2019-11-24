@@ -9,11 +9,6 @@
         regexp: '\bPasswordAuthentication\b'
         line: 'PasswordAuthentication no'
 
-   - name: "Update apt cache"
-     apt:
-        update_cache: yes
-        # cache_validity_time: 3600
-
    - name: "Install exfat drivers"
      apt:
         name: exfat-fuse,exfat-utils
