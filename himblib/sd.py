@@ -214,10 +214,6 @@ class SD(Command):
 
     def setup_boot(self):
         with self.mounted("boot") as root:
-            # Create an empty 'ssh' file to enable sshd
-            with open(os.path.join(root, "ssh"), "wb"):
-                pass
-
             netcfg = []
             for essid, password in self.settings.WIFI_NETWORKS:
                 res = subprocess.run(["wpa_passphrase", essid], input=password + "\n",
@@ -275,6 +271,19 @@ class SD(Command):
     def setup_rootfs(self):
         with self.mounted("rootfs") as root:
             self.restore_apt_cache(root)
+
+            # Generate SSH host keys
+            ssh_dir = os.path.join(root, "etc", "ssh")
+            # Remove existing host keys
+            for fn in os.listdir(ssh_dir):
+                if fn.startswith("ssh_host_") and fn.endswith("_key"):
+                    os.unlink(os.path.join(ssh_dir, fn))
+            # Install or generate new ones
+            if self.settings.SSH_HOST_KEYS is None:
+                # Generate new ones
+                subprocess.run(["ssh-keygen", "-A", "-f", root], check=True)
+            else:
+                subprocess.run(["tar", "-C", ssh_dir, "-axf", self.settings.SSH_HOST_KEYS], check=True)
 
             # To support multiple arm systems, ld.so.preload tends to contain something like:
             # /usr/lib/arm-linux-gnueabihf/libarmmem-${PLATFORM}.so

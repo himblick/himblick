@@ -11,3 +11,7 @@ WIFI_NETWORKS = []
 
 # Set this to a directory used to cache intermediate bits
 CACHE_DIR = None
+
+# Tarball with ssh host keys to reuse
+# If None, generate random ones
+SSH_HOST_KEYS = None
