@@ -36,7 +36,7 @@
         src: /dev/disk/by-label/media
         path: /srv/media
         fstype: exfat
-        opts: uid=1000,gid=1000,fmask=113,dmask=007,rw,noatime
+        opts: uid=1000,gid=1000,fmask=113,dmask=007,rw,noatime,noauto
         state: present
 
    - name: "Install media player dependencies"
