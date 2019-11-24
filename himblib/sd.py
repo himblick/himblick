@@ -6,7 +6,8 @@ import subprocess
 import json
 import logging
 import os
-import tempfile
+import shlex
+import shutil
 import importlib.resources
 from .utils import make_progressbar
 
@@ -15,6 +16,15 @@ log = logging.getLogger(__name__)
 
 def format_gb(size):
     return "{:.3f}GB".format(size / (1024**3))
+
+
+class Cache:
+    def __init__(self, root):
+        self.root = root
+
+    def get(self, name):
+        res = os.path.join(self.root, name)
+        os.makedirs(res, exist_ok=True)
 
 
 class SD(Command):
@@ -221,53 +231,133 @@ class SD(Command):
                     for line in netcfg:
                         print(line, file=fd)
 
+    def save_apt_cache(self, rootfs_mountpoint: str):
+        """
+        Copy .deb files from the apt cache in the rootfs to our local cache
+        """
+        if not self.cache:
+            return
+
+        rootfs_apt_cache = os.path.join(rootfs_mountpoint, "var", "cache", "apt", "archives")
+        apt_cache_root = self.cache.get("apt")
+
+        for fn in os.listdir(rootfs_apt_cache):
+            if not fn.endswith(".deb"):
+                continue
+            src = os.path.join(rootfs_apt_cache, fn)
+            dest = os.path.join(apt_cache_root, fn)
+            if os.path.exists(dest) and os.path.getsize(dest) == os.path.getsize(src):
+                continue
+            shutil.copy(src, dest)
+
+    def restore_apt_cache(self, rootfs_mountpoint: str):
+        """
+        Copy .deb files from our local cache to the apt cache in the rootfs
+        """
+        if not self.cache:
+            return
+
+        rootfs_apt_cache = os.path.join(rootfs_mountpoint, "var", "cache", "apt", "archives")
+        apt_cache_root = self.cache.get("apt")
+
+        for fn in os.listdir(apt_cache_root):
+            if not fn.endswith(".deb"):
+                continue
+            src = os.path.join(apt_cache_root, fn)
+            dest = os.path.join(rootfs_apt_cache, fn)
+            if os.path.exists(dest) and os.path.getsize(dest) == os.path.getsize(src):
+                continue
+            shutil.copy(src, dest)
+
     def setup_rootfs(self):
         with self.mounted("rootfs") as root:
+            self.restore_apt_cache(root)
+
+            # To support multiple arm systems, ld.so.preload tends to contain something like:
+            # /usr/lib/arm-linux-gnueabihf/libarmmem-${PLATFORM}.so
+            # I'm not sure where that ${PLATFORM} would be expanded, but it
+            # does not happen in a chroot/nspawn. Since we know we're working
+            # on the 4B, we can expand it ourselves.
+            ld_so_preload = os.path.join(root, "etc", "ld.so.preload")
+            if os.path.exists(ld_so_preload):
+                with open(ld_so_preload, "rt") as fd:
+                    content = fd.read()
+                if "${PLATFORM}" in content:
+                    content = content.replace("${PLATFORM}", "aarch64")
+                    with open(ld_so_preload, "wt") as fd:
+                        fd.write(content)
+
+            # Make sure ansible is installed in the chroot
+            subprocess.run(["systemd-nspawn", "-D", root, "apt", "-y", "install", "ansible"], check=True)
+
+            # We cannot simply use ansible's chroot connector:
+            #  - systemd setup does not work (see https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=895550)
+            #  - ansible does not mount /dev, /proc and so on in chroots, so
+            #    many packages fail to install
+            #
+            # We work around it coping all ansible needs inside the rootfs,
+            # then using systemd-nspawn to run ansible inside it using the
+            # `local` connector.
+
+            # Create an ansible environment inside the rootfs
+            ansible_dir = os.path.join(root, "srv", "himblick", "ansible")
+            os.makedirs(ansible_dir, exist_ok=True)
+
+            # TODO: take playbook and roles names from config?
+
+            # Copy the main playbook
+            dest = os.path.join(ansible_dir, "rootfs.yaml")
+            if os.path.exists(dest):
+                os.unlink(dest)
+            shutil.copy("rootfs.yaml", dest)
+
+            # Copy all the roles
+            dest = os.path.join(ansible_dir, "roles")
+            if os.path.exists(dest):
+                shutil.rmtree(dest)
+            shutil.copytree("roles", os.path.join(ansible_dir, "roles"))
+
             # Vars to pass to the ansible playbook
             playbook_vars = {}
 
-            with tempfile.TemporaryDirectory() as workdir:
-                ansible_inventory = os.path.join(workdir, "inventory.ini")
-                with open(ansible_inventory, "wt") as fd:
-                    print("[rootfs]", file=fd)
-                    print("{} ansible_connection=chroot {}".format(
-                            os.path.abspath(root),
-                            " ".join("{}={}".format(k, v) for k, v in playbook_vars.items())),
-                          file=fd)
+            ansible_inventory = os.path.join(ansible_dir, "inventory.ini")
+            with open(ansible_inventory, "wt") as fd:
+                print("[rootfs]", file=fd)
+                print("localhost ansible_connection=local {}".format(
+                        " ".join("{}={}".format(k, shlex.quote(v)) for k, v in playbook_vars.items())),
+                      file=fd)
 
-                ansible_cfg = os.path.join(workdir, "ansible.cfg")
-                with open(ansible_cfg, "wt") as fd:
-                    print("[defaults]", file=fd)
-                    print("nocows = 1", file=fd)
-                    print("inventory = {}".format(os.path.abspath(ansible_inventory)), file=fd)
+            ansible_cfg = os.path.join(ansible_dir, "ansible.cfg")
+            with open(ansible_cfg, "wt") as fd:
+                print("[defaults]", file=fd)
+                print("nocows = 1", file=fd)
+                print("inventory = inventory.ini", file=fd)
 
-                env = dict(os.environ)
-                env["ANSIBLE_CONFIG"] = ansible_cfg
+            env = dict(os.environ)
+            env["ANSIBLE_CONFIG"] = ansible_cfg
 
-                with importlib.resources.path("himblib", "rootfs.yaml") as playbook:
-                    # subprocess.run(["ansible", "all", "-m", "setup"], env=env, check=True)
-                    subprocess.run(["ansible-playbook", "-v", playbook], env=env, check=True)
-                # args = ["ansible-playbook", "-v", os.path.abspath(sysdesc.playbook)]
-                # ansible_sh = os.path.join(workdir, "ansible.sh")
-                # with open(ansible_sh, "wt") as fd:
-                #     print("#!/bin/sh", file=fd)
-                #     print("set -xue", file=fd)
-                #     print("export ANSIBLE_CONFIG={}".format(shlex.quote(ansible_cfg)), file=fd)
-                #     print(" ".join(shlex.quote(x) for x in args), file=fd)
-                # os.chmod(ansible_sh, 0o755)
-    #
-    #            res = self._run_ansible([ansible_sh])
-    #            if res.result != 0:
-    #                self.log.warn("Rerunning ansible to check what fails")
-    #                self._run_ansible([ansible_sh])
-    #                raise RuntimeError("ansible exited with result {}".format(res.result))
-    #            else:
-    #                return res.changed == 0 and res.unreachable == 0 and self.failed == 0
+            args = ["exec", "ansible-playbook", "-v", "rootfs.yaml"]
+            ansible_sh = os.path.join(ansible_dir, "rootfs.sh")
+            with open(ansible_sh, "wt") as fd:
+                print("#!/bin/sh", file=fd)
+                print("set -xue", file=fd)
+                print('cd $(dirname -- "$0")', file=fd)
+                print("export ANSIBLE_CONFIG=ansible.cfg", file=fd)
+                print(" ".join(shlex.quote(x) for x in args), file=fd)
+            os.chmod(ansible_sh, 0o755)
+
+            subprocess.run(["systemd-nspawn", "-D", root, "/srv/himblick/ansible/rootfs.sh"], check=True)
+
+            self.save_apt_cache(root)
 
     def run(self):
         """
         Set up an imblick private image
         """
+        self.cache = None
+        if self.settings.CACHE_DIR:
+            self.cache = Cache(self.settings.CACHE_DIR)
+
         if self.args.locate:
             print(self.locate()["path"])
         elif self.args.umount:

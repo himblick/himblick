@@ -9,6 +9,11 @@
         regexp: '\bPasswordAuthentication\b'
         line: 'PasswordAuthentication no'
 
+   - name: "Update apt cache"
+     apt:
+        update_cache: yes
+        # cache_validity_time: 3600
+
    - name: "Install exfat drivers"
      apt:
         name: exfat-fuse,exfat-utils
@@ -38,3 +43,16 @@
         fstype: exfat
         opts: uid=1000,gid=1000,fmask=113,dmask=007,rw,noatime
         state: present
+
+   - name: "Install media player dependencies"
+     apt:
+        pkg:
+         - xserver-xorg
+         - x11-xserver-utils
+         - xinit
+         - openbox
+         - omxplayer
+         - okular
+        state: present
+        update_cache: no
+        install_recommends: no
