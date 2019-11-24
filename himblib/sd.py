@@ -38,6 +38,8 @@ class SD(Command):
         parser = super().make_subparser(subparsers)
         parser.add_argument("--config", "-C", action="store", metavar="settings.py",
                             help="configuration file to load")
+        parser.add_argument("--hostname", action="store", metavar="hostname",
+                            help="hostname to use")
         parser.add_argument("--shell", action="store_true",
                             help="open a shell inside the rootfs")
         parser.add_argument("--locate", action="store_true",
@@ -371,6 +373,7 @@ class SD(Command):
             playbook_vars = {
                 "KEYBOARD_LAYOUT": self.settings.KEYBOARD_LAYOUT,
                 "TIMEZONE": self.settings.TIMEZONE,
+                "HOSTNAME": self.args.hostname or self.settings.HOSTNAME,
             }
 
             # Write ansible's inventory

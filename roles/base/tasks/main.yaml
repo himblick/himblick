@@ -17,9 +17,18 @@
    timezone:
      name: "{{TIMEZONE}}"
 
+ - name: "set hostname"
+   hostname:
+     name: "{{HOSTNAME}}"
+
  - name: "Disable ssh password authentication"
    lineinfile:
       path: /etc/ssh/sshd_config
       regexp: '\bPasswordAuthentication\b'
       line: 'PasswordAuthentication no'
 
+ - name: "Make machine ssh-discoverable"
+   copy:
+      remote_src: yes
+      src: /usr/share/doc/avahi-daemon/examples/ssh.service
+      dest: /etc/avahi/services/

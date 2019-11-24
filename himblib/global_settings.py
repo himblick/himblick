@@ -24,3 +24,6 @@ KEYBOARD_LAYOUT = "us"
 
 # Timezone to configure
 TIMEZONE = "Europe/Berlin"
+
+# Host name
+HOSTNAME = "himblick"
