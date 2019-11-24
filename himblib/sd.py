@@ -35,6 +35,8 @@ class SD(Command):
     @classmethod
     def make_subparser(cls, subparsers):
         parser = super().make_subparser(subparsers)
+        parser.add_argument("--shell", action="store_true",
+                            help="open a shell inside the rootfs")
         parser.add_argument("--locate", action="store_true",
                             help="locate the device where the SD image is present")
         parser.add_argument("--umount", action="store_true",
@@ -364,7 +366,10 @@ class SD(Command):
         if self.settings.CACHE_DIR:
             self.cache = Cache(self.settings.CACHE_DIR)
 
-        if self.args.locate:
+        if self.args.shell:
+            with self.mounted("rootfs") as root:
+                subprocess.run(["systemd-nspawn", "-D", root])
+        elif self.args.locate:
             print(self.locate()["path"])
         elif self.args.umount:
             dev = self.locate()
