@@ -413,8 +413,8 @@ class SD(Command):
             self.cache = Cache(self.settings.CACHE_DIR)
 
         if self.args.shell:
-            with self.mounted("rootfs") as root:
-                subprocess.run(["systemd-nspawn", "-D", root])
+            with self.mounted("rootfs") as chroot:
+                chroot.run([])
         elif self.args.locate:
             print(self.locate()["path"])
         elif self.args.umount:
