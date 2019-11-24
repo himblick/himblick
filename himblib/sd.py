@@ -311,7 +311,8 @@ class SD(Command):
                 subprocess.run(["systemd-nspawn", "-D", root, "apt", "update"], check=True)
 
             # Make sure ansible is installed in the chroot
-            subprocess.run(["systemd-nspawn", "-D", root, "apt", "-y", "install", "ansible"], check=True)
+            if not os.path.exists(os.path.join(root, "var", "lib", "dpkg", "info", "ansible.list")):
+                subprocess.run(["systemd-nspawn", "-D", root, "apt", "-y", "install", "ansible"], check=True)
 
             # We cannot simply use ansible's chroot connector:
             #  - systemd setup does not work (see https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=895550)
