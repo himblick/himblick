@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Any
 from .cmdline import Command, Fail
+from .chroot import Chroot
 from contextlib import contextmanager
 import subprocess
 import json
@@ -227,14 +228,15 @@ class SD(Command):
             subprocess.run(["udisksctl", "mount", "-b", part["path"]], stdout=subprocess.DEVNULL, check=True)
             part = self.locate_partition(label)
 
-        yield part["mountpoint"]
+        yield Chroot(part["mountpoint"])
 
         subprocess.run(["udisksctl", "unmount", "-b", part["path"]], stdout=subprocess.DEVNULL, check=True)
 
     def setup_boot(self):
-        with self.mounted("boot") as root:
+        with self.mounted("boot") as chroot:
             # WiFi configuration
-            wifi_config = os.path.join(root, "wifi.ini")
+            # Write a wifi.ini that will be processed by `himblick wifi-setup` on boot
+            wifi_config = chroot.abspath("wifi.ini")
             if self.settings.WIFI_CONFIG:
                 with open(wifi_config, "wt") as fd:
                     fd.write(self.settings.WIFI_CONFIG.lstrip())
@@ -242,22 +244,24 @@ class SD(Command):
                 os.unlink(wifi_config)
 
             # Remove ' init=/usr/lib/raspi-config/init_resize.sh' from cmdline.txt
-            cmdline = os.path.join(root, "cmdline.txt")
-            with open(cmdline, "rt") as fd:
-                content = fd.read()
-            fixed = content.replace(" init=/usr/lib/raspi-config/init_resize.sh", "")
-            if fixed != content:
-                with open(cmdline, "wt") as fd:
-                    fd.write(fixed)
+            # This is present by default in raspbian to perform partition
+            # resize on the first boot, and it removes itself and reboots after
+            # running. We do not need it, as we do our own partition resizing.
+            # Also, we can't keep it, since we remove raspi-config and the
+            # init_resize.sh script would break without it
+            chroot.file_contents_replace(
+                    relpath="cmdline.txt",
+                    search=" init=/usr/lib/raspi-config/init_resize.sh",
+                    replace="")
 
-    def save_apt_cache(self, rootfs_mountpoint: str):
+    def save_apt_cache(self, chroot: Chroot):
         """
         Copy .deb files from the apt cache in the rootfs to our local cache
         """
         if not self.cache:
             return
 
-        rootfs_apt_cache = os.path.join(rootfs_mountpoint, "var", "cache", "apt", "archives")
+        rootfs_apt_cache = chroot.abspath("/var/cache/apt/archives")
         apt_cache_root = self.cache.get("apt")
 
         for fn in os.listdir(rootfs_apt_cache):
@@ -269,14 +273,14 @@ class SD(Command):
                 continue
             shutil.copy(src, dest)
 
-    def restore_apt_cache(self, rootfs_mountpoint: str):
+    def restore_apt_cache(self, chroot: Chroot):
         """
         Copy .deb files from our local cache to the apt cache in the rootfs
         """
         if not self.cache:
             return
 
-        rootfs_apt_cache = os.path.join(rootfs_mountpoint, "var", "cache", "apt", "archives")
+        rootfs_apt_cache = chroot.abspath("/var/cache/apt/archives")
         apt_cache_root = self.cache.get("apt")
 
         for fn in os.listdir(apt_cache_root):
@@ -289,11 +293,11 @@ class SD(Command):
             shutil.copy(src, dest)
 
     def setup_rootfs(self):
-        with self.mounted("rootfs") as root:
-            self.restore_apt_cache(root)
+        with self.mounted("rootfs") as chroot:
+            self.restore_apt_cache(chroot)
 
             # Generate SSH host keys
-            ssh_dir = os.path.join(root, "etc", "ssh")
+            ssh_dir = chroot.abspath("/etc/ssh")
             # Remove existing host keys
             for fn in os.listdir(ssh_dir):
                 if fn.startswith("ssh_host_") and fn.endswith("_key"):
@@ -301,7 +305,7 @@ class SD(Command):
             # Install or generate new ones
             if self.settings.SSH_HOST_KEYS is None:
                 # Generate new ones
-                subprocess.run(["ssh-keygen", "-A", "-f", root], check=True)
+                subprocess.run(["ssh-keygen", "-A", "-f", chroot.root], check=True)
             else:
                 subprocess.run(["tar", "-C", ssh_dir, "-axf", self.settings.SSH_HOST_KEYS], check=True)
 
@@ -310,86 +314,58 @@ class SD(Command):
             # I'm not sure where that ${PLATFORM} would be expanded, but it
             # does not happen in a chroot/nspawn. Since we know we're working
             # on the 4B, we can expand it ourselves.
-            ld_so_preload = os.path.join(root, "etc", "ld.so.preload")
-            if os.path.exists(ld_so_preload):
-                with open(ld_so_preload, "rt") as fd:
-                    content = fd.read()
-                if "${PLATFORM}" in content:
-                    content = content.replace("${PLATFORM}", "aarch64")
-                    with open(ld_so_preload, "wt") as fd:
-                        fd.write(content)
+            chroot.file_contents_replace(
+                    relpath="/etc/ld.so.preload",
+                    search="${PLATFORM}",
+                    replace="aarch64")
 
             # Update apt cache
-            apt_cache = os.path.join(root, "var", "cache", "apt", "pkgcache.bin")
+            apt_cache = chroot.abspath("/var/cache/apt/pkgcache.bin")
             if not os.path.exists(apt_cache) or time.time() - os.path.getmtime(apt_cache) > 86400:
-                subprocess.run(["systemd-nspawn", "-D", root, "apt", "update"], check=True)
+                chroot.run(["apt", "update"], check=True)
 
             # Install our own package
             if not os.path.exists(self.settings.HIMBLICK_PACKAGE):
                 raise Fail(f"{self.settings.HIMBLICK_PACKAGE} (configured as HIMBLICK_PACKAGE) does not exist")
-            pkgfile = os.path.basename(self.settings.HIMBLICK_PACKAGE)
-            dest = os.path.join(root, "srv", "himblick", pkgfile)
-            os.makedirs(os.path.dirname(dest), exist_ok=True)
-            if os.path.exists(dest):
-                # Do not install it twice if it didn't change
-                with open(self.settings.HIMBLICK_PACKAGE, "rb") as fd:
-                    src_contents = fd.read()
-                with open(dest, "rb") as fd:
-                    dst_contents = fd.read()
-                if src_contents != dst_contents:
-                    os.unlink(dest)
-            if not os.path.exists(dest):
-                shutil.copy(self.settings.HIMBLICK_PACKAGE, dest)
-                subprocess.run(["systemd-nspawn", "-D", root,
-                                "apt", "-y", "--no-install-recommends", "install",
-                                os.path.join("/srv/himblick", pkgfile)],
-                               check=True)
+            debname = os.path.basename(self.settings.HIMBLICK_PACKAGE)
+            dst_pkgfile = os.path.join("/srv/himblick", debname)
+            if chroot.copy_if_unchanged(self.settings.HIMBLICK_PACKAGE, dst_pkgfile):
+                chroot.run(["apt", "-y", "--no-install-recommends", "install", dst_pkgfile])
 
             # Do the systemd unit manipulation here, because it does not work
             # in ansible's playbook, as systemd is not started in the chroot
             # and ansible requires it even to enable units, even if it
-            # documents that it doesn't (see below)
-            subprocess.run(["systemctl", "--root=" + root, "enable", "himblick_wifi_setup.service"], check=True)
-            subprocess.run(["systemctl", "--root=" + root, "unmask", "himblick_wifi_setup.service"], check=True)
-            subprocess.run(["systemctl", "--root=" + root, "disable", "apply_noobs_os_config.service"], check=True)
-            subprocess.run(["systemctl", "--root=" + root, "mask", "apply_noobs_os_config.service"], check=True)
-            subprocess.run(["systemctl", "--root=" + root, "disable", "regenerate_ssh_host_keys.service"], check=True)
-            subprocess.run(["systemctl", "--root=" + root, "mask", "regenerate_ssh_host_keys.service"], check=True)
-            subprocess.run(["systemctl", "--root=" + root, "disable", "sshswitch.service"], check=True)
-            subprocess.run(["systemctl", "--root=" + root, "mask", "sshswitch.service"], check=True)
-            subprocess.run(["systemctl", "--root=" + root, "enable", "ssh.service"], check=True)
-            subprocess.run(["systemctl", "--root=" + root, "unmask", "ssh.service"], check=True)
+            # documents that it doesn't.
+            #
+            # See https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=895550)
+            chroot.systemctl_enable("himblick_wifi_setup.service")
+            chroot.systemctl_disable("apply_noobs_os_config.service")
+            chroot.systemctl_disable("regenerate_ssh_host_keys.service")
+            chroot.systemctl_disable("sshswitch.service")
+            chroot.systemctl_enable("ssh.service")
 
             # Make sure ansible is installed in the chroot
-            if not os.path.exists(os.path.join(root, "var", "lib", "dpkg", "info", "ansible.list")):
-                subprocess.run(["systemd-nspawn", "-D", root, "apt", "-y", "install", "ansible"], check=True)
+            chroot.apt_install("ansible")
 
             # We cannot simply use ansible's chroot connector:
-            #  - systemd setup does not work (see https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=895550)
             #  - ansible does not mount /dev, /proc and so on in chroots, so
             #    many packages fail to install
             #
             # We work around it coping all ansible needs inside the rootfs,
             # then using systemd-nspawn to run ansible inside it using the
             # `local` connector.
+            #
+            #  - systemd ansible operations still don't work, so we do them
+            #    here in himblick instead
 
             # Create an ansible environment inside the rootfs
-            ansible_dir = os.path.join(root, "srv", "himblick", "ansible")
-            os.makedirs(ansible_dir, exist_ok=True)
+            ansible_dir = chroot.abspath("/srv/himblick/ansible", create=True)
 
             # TODO: take playbook and roles names from config?
 
-            # Copy the main playbook
-            dest = os.path.join(ansible_dir, "rootfs.yaml")
-            if os.path.exists(dest):
-                os.unlink(dest)
-            shutil.copy("rootfs.yaml", dest)
-
-            # Copy all the roles
-            dest = os.path.join(ansible_dir, "roles")
-            if os.path.exists(dest):
-                shutil.rmtree(dest)
-            shutil.copytree("roles", os.path.join(ansible_dir, "roles"))
+            # Copy the ansible playbook and roles
+            chroot.copy_to("rootfs.yaml", "/srv/himblick/ansible")
+            chroot.copy_to("roles", "/srv/himblick/ansible")
 
             # Vars to pass to the ansible playbook
             playbook_vars = {
@@ -397,6 +373,7 @@ class SD(Command):
                 "TIMEZONE": self.settings.TIMEZONE,
             }
 
+            # Write ansible's inventory
             ansible_inventory = os.path.join(ansible_dir, "inventory.ini")
             with open(ansible_inventory, "wt") as fd:
                 print("[rootfs]", file=fd)
@@ -404,15 +381,14 @@ class SD(Command):
                         " ".join("{}={}".format(k, shlex.quote(v)) for k, v in playbook_vars.items())),
                       file=fd)
 
+            # Write ansible's config
             ansible_cfg = os.path.join(ansible_dir, "ansible.cfg")
             with open(ansible_cfg, "wt") as fd:
                 print("[defaults]", file=fd)
                 print("nocows = 1", file=fd)
                 print("inventory = inventory.ini", file=fd)
 
-            env = dict(os.environ)
-            env["ANSIBLE_CONFIG"] = ansible_cfg
-
+            # Write ansible's startup script
             args = ["exec", "ansible-playbook", "-v", "rootfs.yaml"]
             ansible_sh = os.path.join(ansible_dir, "rootfs.sh")
             with open(ansible_sh, "wt") as fd:
@@ -423,9 +399,10 @@ class SD(Command):
                 print(" ".join(shlex.quote(x) for x in args), file=fd)
             os.chmod(ansible_sh, 0o755)
 
-            subprocess.run(["systemd-nspawn", "-D", root, "/srv/himblick/ansible/rootfs.sh"], check=True)
+            # Run ansible
+            chroot.run(["/srv/himblick/ansible/rootfs.sh"], check=True)
 
-            self.save_apt_cache(root)
+            self.save_apt_cache(chroot)
 
     def run(self):
         """
