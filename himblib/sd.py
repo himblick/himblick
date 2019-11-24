@@ -173,6 +173,9 @@ class SD(Command):
             constraint.maxSize = target_root_size
             disk.maximizePartition(part_root, constraint)
             disk.commit()
+            time.sleep(0.3)
+            self.umount(self.locate())
+            time.sleep(0.3)
 
             subprocess.run(["e2fsck", "-fy", part_root.path], check=True)
             subprocess.run(["resize2fs", part_root.path], check=True)
@@ -188,6 +191,9 @@ class SD(Command):
                     geometry=free_space)
             disk.addPartition(partition=partition, constraint=device.optimalAlignedConstraint)
             disk.commit()
+            time.sleep(0.3)
+            self.umount(self.locate())
+            time.sleep(0.3)
             log.info("%s media partition created", format_gb(free_space.length * device.sectorSize))
 
             # Create exFAT file system
