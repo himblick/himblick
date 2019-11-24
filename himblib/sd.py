@@ -319,12 +319,37 @@ class SD(Command):
             if not os.path.exists(self.settings.HIMBLICK_PACKAGE):
                 raise Fail(f"{self.settings.HIMBLICK_PACKAGE} (configured as HIMBLICK_PACKAGE) does not exist")
             pkgfile = os.path.basename(self.settings.HIMBLICK_PACKAGE)
-            shutil.copy(
-                    self.settings.HIMBLICK_PACKAGE,
-                    os.path.join(root, "srv", "himblick", pkgfile))
-            subprocess.run(["systemd-nspawn", "-D", root,
-                            "apt", "-y", "--no-install-recommends", "install", os.path.join("/srv/himblick", pkgfile)],
-                           check=True)
+            dest = os.path.join(root, "srv", "himblick", pkgfile)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            if os.path.exists(dest):
+                # Do not install it twice if it didn't change
+                with open(self.settings.HIMBLICK_PACKAGE, "rb") as fd:
+                    src_contents = fd.read()
+                with open(dest, "rb") as fd:
+                    dst_contents = fd.read()
+                if src_contents != dst_contents:
+                    os.unlink(dest)
+            if not os.path.exists(dest):
+                shutil.copy(self.settings.HIMBLICK_PACKAGE, dest)
+                subprocess.run(["systemd-nspawn", "-D", root,
+                                "apt", "-y", "--no-install-recommends", "install",
+                                os.path.join("/srv/himblick", pkgfile)],
+                               check=True)
+
+            # Do the systemd unit manipulation here, because it does not work
+            # in ansible's playbook, as systemd is not started in the chroot
+            # and ansible requires it even to enable units, even if it
+            # documents that it doesn't (see below)
+            subprocess.run(["systemctl", "--root=" + root, "enable", "himblick_wifi_setup.service"], check=True)
+            subprocess.run(["systemctl", "--root=" + root, "unmask", "himblick_wifi_setup.service"], check=True)
+            subprocess.run(["systemctl", "--root=" + root, "disable", "apply_noobs_os_config.service"], check=True)
+            subprocess.run(["systemctl", "--root=" + root, "mask", "apply_noobs_os_config.service"], check=True)
+            subprocess.run(["systemctl", "--root=" + root, "disable", "regenerate_ssh_host_keys.service"], check=True)
+            subprocess.run(["systemctl", "--root=" + root, "mask", "regenerate_ssh_host_keys.service"], check=True)
+            subprocess.run(["systemctl", "--root=" + root, "disable", "sshswitch.service"], check=True)
+            subprocess.run(["systemctl", "--root=" + root, "mask", "sshswitch.service"], check=True)
+            subprocess.run(["systemctl", "--root=" + root, "enable", "ssh.service"], check=True)
+            subprocess.run(["systemctl", "--root=" + root, "unmask", "ssh.service"], check=True)
 
             # Make sure ansible is installed in the chroot
             if not os.path.exists(os.path.join(root, "var", "lib", "dpkg", "info", "ansible.list")):
