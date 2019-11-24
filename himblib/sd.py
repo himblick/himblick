@@ -332,7 +332,7 @@ class SD(Command):
             debname = os.path.basename(self.settings.HIMBLICK_PACKAGE)
             dst_pkgfile = os.path.join("/srv/himblick", debname)
             if chroot.copy_if_unchanged(self.settings.HIMBLICK_PACKAGE, dst_pkgfile):
-                chroot.run(["apt", "-y", "--no-install-recommends", "install", dst_pkgfile])
+                chroot.run(["apt", "-y", "--no-install-recommends", "--reinstall", "install", dst_pkgfile])
 
             # Do the systemd unit manipulation here, because it does not work
             # in ansible's playbook, as systemd is not started in the chroot

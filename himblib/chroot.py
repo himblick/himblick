@@ -73,9 +73,10 @@ class Chroot:
                 return False
 
         os.makedirs(os.path.dirname(dest), exist_ok=True)
-        if not os.path.exists(dest):
+        if os.path.exists(dest):
             os.unlink(dest)
         shutil.copy(src, dest)
+        return True
 
     def copy_to(self, src: str, dst_relpath: str):
         """
