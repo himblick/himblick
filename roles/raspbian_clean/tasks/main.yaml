@@ -4,5 +4,8 @@
      name:
       - raspberrypi-net-mods
       - raspi-config
+      - triggerhappy
      state: absent
      purge: yes
+
+# Lots of systemd-related tasks have to be done by himblick and can't be here
