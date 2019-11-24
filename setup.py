@@ -5,7 +5,11 @@ from setuptools import setup
 setup(
     name="himblick",
     python_requires=">= 3.7",
-    install_requires=['parted', 'progressbar'],
+    # install_requires=['pyparted', 'progressbar'],
+    # http://setuptools.readthedocs.io/en/latest/setuptools.html#declaring-extras-optional-features-with-their-own-dependencies
+    extras_require={
+        'setup': ['pyparted', "progressbar"],
+    },
     version="1.0",
     description="Himblick setup and maintenance tool",
     author="Enrico Zini <enrico@enricozini.org>, Ulrike Uhlig <u@451f.org>",
