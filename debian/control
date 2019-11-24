@@ -1,0 +1,26 @@
+Source: himblick
+Maintainer: Enrico Zini <enrico@debian.org>
+Uploaders: Ulrike Uhlig <ulrike@debian.org>
+Section: misc
+Priority: optional
+Build-Depends: debhelper (>= 12),
+               dh-python,
+               python3-all,
+               python3-setuptools
+Build-Depends-Indep: help2man
+Standards-Version: 4.1.5
+Rules-Requires-Root: no
+Homepage: https://github.com/himblick/himblick
+Vcs-Git: https://github.com/himblick/himblick.git
+Vcs-Browser: https://github.com/himblick/himblick
+
+Package: himblick
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends},
+Recommends: ${python3:Recommends},
+            exfat-utils, udisks2, wpasupplicant,
+            qemu-user-binfmt, qemu-user-static, systemd-container,
+            qemu-system-arm  
+Description: Raspberry Pi as a digital signage box
+ This package contains the tools to setup and manage a digital storage box
+ based on a Raspberry Pi 4B computer.

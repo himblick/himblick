@@ -1,0 +1,16 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: himblick
+Upstream-Contact: Enrico Zini <enrico@enricozini.org>, Ulrike Uhlig <u@451f.org>
+Source: https://github.com/himblick/himblick
+
+Files: *
+Copyright: 2019 Enrico Zini <enrico@enricozini.org>, Ulrike Uhlig <u@451f.org>
+License: GPL-3+
+
+Files: debian/*
+Copyright: 2019 Enrico Zini <enrico@enricozini.org>, Ulrike Uhlig <u@451f.org>
+License: GPL-3+
+
+License: GPL-3+
+ The full text of the GPL version 3 is distributed in
+ /usr/share/common-licenses/GPL-3 on Debian systems.

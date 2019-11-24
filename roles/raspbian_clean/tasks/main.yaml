@@ -1,0 +1,28 @@
+---
+ - name: Deinstall unneeded Raspbian packages
+   apt:
+     name:
+      - raspberrypi-net-mods
+      - raspi-config
+     state: absent
+     purge: yes
+ - name: Disable unneeded Raspbian apply_noobs_os_config.service
+   systemd:
+     name: apply_noobs_os_config.service
+     enabled: no
+     masked: yes
+ - name: Disable unneeded Raspbian regenerate_ssh_host_keys.service
+   systemd:
+     name: regenerate_ssh_host_keys.service
+     enabled: no
+     masked: yes
+ - name: Disable unneeded Raspbian sshswitch.service
+   systemd:
+     name: sshswitch.service
+     enabled: no
+     masked: yes
+ - name: Enable sshd
+   systemd:
+     name: ssh.service
+     enabled: yes
+     masked: no

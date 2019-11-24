@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+
+srcname = himblick
+version = $(shell sed -nre 's/.*version[ ]*=[ ]*"([^"]+)".*/\1/p' setup.py)
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+debsrc:
+	python3 setup.py sdist
+	mv dist/$(srcname)-$(version).tar.gz ../$(srcname)_$(version).orig.tar.gz
+	gbp buildpackage -S -us -uc
