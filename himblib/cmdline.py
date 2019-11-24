@@ -23,7 +23,6 @@ class Command:
     def __init__(self, args):
         self.args = args
         self.setup_logging()
-        self.settings = self.load_settings()
 
     def setup_logging(self):
         FORMAT = "%(asctime)-15s %(levelname)s %(message)s"
@@ -33,13 +32,6 @@ class Command:
             logging.basicConfig(level=logging.INFO, stream=sys.stderr, format=FORMAT)
         else:
             logging.basicConfig(level=logging.WARN, stream=sys.stderr, format=FORMAT)
-
-    def load_settings(self):
-        from .settings import Settings
-        settings = Settings()
-        if self.args.config is not None:
-            settings.load(self.args.config)
-        return settings
 
     @classmethod
     def make_subparser(cls, subparsers):
@@ -55,6 +47,4 @@ class Command:
         parser.set_defaults(handler=cls)
         parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
         parser.add_argument("--debug", action="store_true", help="verbose output")
-        parser.add_argument("--config", "-C", action="store", metavar="settings.py",
-                            help="configuration file to load")
         return parser

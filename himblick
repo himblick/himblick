@@ -13,6 +13,9 @@ def main():
     from himblib.sd import SD
     SD.make_subparser(subparsers)
 
+    from himblib.wifi_setup import WifiSetup
+    WifiSetup.make_subparser(subparsers)
+
     args = parser.parse_args()
     if args.command is None:
         parser.print_help()

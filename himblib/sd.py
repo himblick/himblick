@@ -35,6 +35,8 @@ class SD(Command):
     @classmethod
     def make_subparser(cls, subparsers):
         parser = super().make_subparser(subparsers)
+        parser.add_argument("--config", "-C", action="store", metavar="settings.py",
+                            help="configuration file to load")
         parser.add_argument("--shell", action="store_true",
                             help="open a shell inside the rootfs")
         parser.add_argument("--locate", action="store_true",
@@ -48,6 +50,17 @@ class SD(Command):
         parser.add_argument("--setup", action="store", nargs="?", const="all",
                             help="set up the system partition")
         return parser
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.settings = self.load_settings()
+
+    def load_settings(self):
+        from .settings import Settings
+        settings = Settings()
+        if self.args.config is not None:
+            settings.load(self.args.config)
+        return settings
 
     def locate(self) -> Dict[str, Any]:
         """
@@ -220,21 +233,13 @@ class SD(Command):
 
     def setup_boot(self):
         with self.mounted("boot") as root:
-            netcfg = []
-            for essid, password in self.settings.WIFI_NETWORKS:
-                res = subprocess.run(["wpa_passphrase", essid], input=password + "\n",
-                                     capture_output=True, text=True, check=True)
-                for line in res.stdout.splitlines():
-                    if line.strip().startswith("#"):
-                        continue
-                    netcfg.append(line)
-            if netcfg:
-                with open(os.path.join(root, "wpa_supplicant.conf"), "wt") as fd:
-                    print("ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev", file=fd)
-                    print("update_config=1", file=fd)
-                    print("country=de", file=fd)
-                    for line in netcfg:
-                        print(line, file=fd)
+            # WiFi configuration
+            wifi_config = os.path.join(root, "wifi.ini")
+            if self.settings.WIFI_CONFIG:
+                with open(wifi_config, "wt") as fd:
+                    fd.write(self.settings.WIFI_CONFIG.lstrip())
+            elif os.path.exists(wifi_config):
+                os.unlink(wifi_config)
 
     def save_apt_cache(self, rootfs_mountpoint: str):
         """
@@ -309,6 +314,17 @@ class SD(Command):
             apt_cache = os.path.join(root, "var", "cache", "apt", "pkgcache.bin")
             if not os.path.exists(apt_cache) or time.time() - os.path.getmtime(apt_cache) > 86400:
                 subprocess.run(["systemd-nspawn", "-D", root, "apt", "update"], check=True)
+
+            # Install our own package
+            if not os.path.exists(self.settings.HIMBLICK_PACKAGE):
+                raise Fail(f"{self.settings.HIMBLICK_PACKAGE} (configured as HIMBLICK_PACKAGE) does not exist")
+            pkgfile = os.path.basename(self.settings.HIMBLICK_PACKAGE)
+            shutil.copy(
+                    self.settings.HIMBLICK_PACKAGE,
+                    os.path.join(root, "srv", "himblick", pkgfile))
+            subprocess.run(["systemd-nspawn", "-D", root,
+                            "apt", "-y", "--no-install-recommends", "install", os.path.join("/srv/himblick", pkgfile)],
+                           check=True)
 
             # Make sure ansible is installed in the chroot
             if not os.path.exists(os.path.join(root, "var", "lib", "dpkg", "info", "ansible.list")):

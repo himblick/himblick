@@ -39,6 +39,12 @@
         opts: uid=1000,gid=1000,fmask=113,dmask=007,rw,noatime,noauto
         state: present
 
+   - name: "Enable himblick_wifi_setup"
+     systemd:
+       name: himblick_wifi_setup.service
+       enabled: yes
+       masked: no
+
    - name: "Install media player dependencies"
      apt:
         pkg:

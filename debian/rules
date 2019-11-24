@@ -6,6 +6,12 @@ version = $(shell sed -nre 's/.*version[ ]*=[ ]*"([^"]+)".*/\1/p' setup.py)
 %:
 	dh $@ --with python3 --buildsystem=pybuild
 
+override_dh_auto_install:
+	dh_auto_install
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start himblick_wifi_setup.service
+
 debsrc:
 	python3 setup.py sdist
 	mv dist/$(srcname)-$(version).tar.gz ../$(srcname)_$(version).orig.tar.gz
