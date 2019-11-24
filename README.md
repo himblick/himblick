@@ -1,6 +1,8 @@
 # Himblick
 
-Maintain SD images for Smart Signage on Raspberry Pi
+Maintain SD images for Smart Signage on Raspberry Pi.
+
+See this [series of posts](https://www.enricozini.org/blog/2019/himblick/) for design and implentation notes.
 
 ## Depdendencies
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import Dict, Any
 from .cmdline import Command, Fail
 from contextlib import contextmanager
 import subprocess
@@ -34,7 +36,12 @@ class SD(Command):
                             help="set up the system partition")
         return parser
 
-    def locate(self):
+    def locate(self) -> Dict[str, Any]:
+        """
+        Locate the SD card to work on
+
+        :returns: the lsblk data structure for the SD device
+        """
         res = subprocess.run(["lsblk", "-JOb"], text=True, capture_output=True, check=True)
         res = json.loads(res.stdout)
         devs = []
@@ -57,32 +64,44 @@ class SD(Command):
                 continue
             return part
 
-    def umount(self, dev):
+    def umount(self, dev: Dict[str, Any]):
+        """
+        Make sure all the SD partitions are unmounted
+
+        :arg dev: the lsblk data structure for the SD device
+        """
         for part in dev["children"]:
             mp = part["mountpoint"]
             if not mp:
                 continue
             subprocess.run(["umount", mp], check=True)
 
-    def write_image(self, dev):
-        chunksize = 16 * 1024 * 1024
+    def write_image(self, dev: Dict[str, Any]):
+        """
+        Write the base image to the SD card
+        """
+        backing_store = bytearray(16 * 1024 * 1024)
+        copy_buffer = memoryview(backing_store)
         pbar = make_progressbar(maxval=os.path.getsize(self.settings.BASE_IMAGE))
         total_read = 0
         with open(self.settings.BASE_IMAGE, "rb") as fdin:
             with open(dev["path"], "wb") as fdout:
                 pbar.start()
                 while True:
-                    buf = fdin.read(chunksize)
-                    if not buf:
+                    bytes_read = fdin.readinto(copy_buffer)
+                    if not bytes_read:
                         break
-                    total_read += len(buf)
+                    total_read += bytes_read
                     pbar.update(total_read)
-                    fdout.write(buf)
+                    fdout.write(copy_buffer[:bytes_read])
                     fdout.flush()
                     os.fdatasync(fdout.fileno())
                 pbar.finish()
 
-    def partition(self, dev):
+    def partition(self, dev: Dict[str, Any]):
+        """
+        Update partitioning on the SD card
+        """
         try:
             import parted
         except ModuleNotFoundError:
@@ -90,6 +109,8 @@ class SD(Command):
 
         # See https://github.com/dcantrell/pyparted/tree/master/examples
         # for pyparted examples
+        # See https://www.gnu.org/software/parted/api/modules.html
+        # for library documentation
 
         device = parted.getDevice(dev["path"])
         disk = parted.newDisk(device)
@@ -115,15 +136,17 @@ class SD(Command):
         if fs.type != "ext4":
             raise Fail("SD system partition is not an ext4 partition: reset it with --write-image")
 
-        target_root_size = int(round(4 * 1024**3 / device.sectorSize))
-        need_root_resize = part_root.geometry.end - part_root.geometry.start - 16 < target_root_size
-        log.info("%s: partition is only %.1fGB and needs resizing",
-                 part_root.path, target_root_size * device.sectorSize / 1024**3)
-
         if len(partitions) == 3:
             part_media = partitions[2]
         else:
             part_media = None
+
+        # TODO: check partition label, and error out if it exists and is not 'media'
+
+        target_root_size = int(round(4 * 1024**3 / device.sectorSize))
+        need_root_resize = part_root.geometry.end - part_root.geometry.start - 16 < target_root_size
+        log.info("%s: partition is only %.1fGB and needs resizing",
+                 part_root.path, target_root_size * device.sectorSize / 1024**3)
 
         if need_root_resize:
             if part_media:

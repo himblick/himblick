@@ -45,6 +45,9 @@ class NullProgressBar:
     def update(self, val):
         pass
 
+    def finish(self):
+        pass
+
     def __call__(self, val):
         return val
 
