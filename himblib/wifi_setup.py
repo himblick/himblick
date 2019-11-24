@@ -58,5 +58,5 @@ class WifiSetup(Command):
         if self.args.stdout:
             sys.stdout.write(wpa_config)
         else:
-            with atomic_writer(self.args.output) as fd:
+            with atomic_writer(self.args.output, "wt", chmod=0o600) as fd:
                 fd.write(wpa_config)
