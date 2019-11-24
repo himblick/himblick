@@ -47,3 +47,9 @@
         state: present
         update_cache: no
         install_recommends: no
+
+   - name: "Enable lightdm autologin"
+     lineinfile:
+        path: /etc/lightdm/lightdm.conf
+        regexp: ".*autologin-user\\s*=\\s*($|pi)"
+        line: "autologin-user = pi"
