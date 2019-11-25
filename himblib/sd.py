@@ -379,6 +379,9 @@ class SD(Command):
                 print("[defaults]", file=fd)
                 print("nocows = 1", file=fd)
                 print("inventory = inventory.ini", file=fd)
+                print("[inventory]", file=fd)
+                # See https://github.com/ansible/ansible/issues/48859
+                print("enable_plugins = ini", file=fd)
 
             # Write ansible's startup script
             args = ["exec", "ansible-playbook", "-v", "rootfs.yaml"]
