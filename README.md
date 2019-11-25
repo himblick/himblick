@@ -9,6 +9,6 @@ See this [series of posts](https://www.enricozini.org/blog/2019/himblick/) for d
 ```
 apt install python3-parted python3-progressbar exfat-utils \
             udisks2 wpasupplicant \
-            qemu-user-binfmt qemu-user-static systemd-container \
+            qemu binfmt-support qemu-user-static systemd-container \
             qemu-system-arm
 ```
