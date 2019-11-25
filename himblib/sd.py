@@ -10,6 +10,7 @@ import os
 import shlex
 import shutil
 import time
+import yaml
 from .utils import make_progressbar
 
 log = logging.getLogger(__name__)
@@ -358,13 +359,15 @@ class SD(Command):
                 "HOSTNAME": self.args.hostname or self.settings.HOSTNAME,
             }
 
+            vars_file = os.path.join(ansible_dir, "himblick-vars.yaml")
+            with open(vars_file, "wt") as fd:
+                yaml.dump(playbook_vars, fd)
+
             # Write ansible's inventory
             ansible_inventory = os.path.join(ansible_dir, "inventory.ini")
             with open(ansible_inventory, "wt") as fd:
                 print("[rootfs]", file=fd)
-                print("localhost ansible_connection=local {}".format(
-                        " ".join("{}={}".format(k, shlex.quote(v)) for k, v in playbook_vars.items())),
-                      file=fd)
+                print("localhost ansible_connection=local", file=fd)
 
             # Write ansible's config
             ansible_cfg = os.path.join(ansible_dir, "ansible.cfg")

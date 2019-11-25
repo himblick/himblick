@@ -8,7 +8,7 @@ setup(
     # install_requires=['pyparted', 'progressbar'],
     # http://setuptools.readthedocs.io/en/latest/setuptools.html#declaring-extras-optional-features-with-their-own-dependencies
     extras_require={
-        'setup': ['pyparted', "progressbar"],
+        'setup': ['pyparted', "progressbar", "pyyaml"],
     },
     version="1.0",
     description="Himblick setup and maintenance tool",
