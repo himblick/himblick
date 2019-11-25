@@ -37,6 +37,7 @@
    - name: "Install media player dependencies"
      apt:
         pkg:
+         - cpufrequtils
          - xserver-xorg
          - x11-xserver-utils
          - xinit
