@@ -358,6 +358,9 @@ class SD(Command):
                 "TIMEZONE": self.settings.TIMEZONE,
                 "HOSTNAME": self.args.hostname or self.settings.HOSTNAME,
             }
+            if self.settings.SSH_AUTHORIZED_KEY:
+                with open(self.settings.SSH_AUTHORIZED_KEY, "rt") as fd:
+                    playbook_vars["SSH_AUTHORIZED_KEY"] = fd.read()
 
             vars_file = os.path.join(ansible_dir, "himblick-vars.yaml")
             with open(vars_file, "wt") as fd:

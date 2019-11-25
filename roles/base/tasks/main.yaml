@@ -32,3 +32,10 @@
       remote_src: yes
       src: /usr/share/doc/avahi-daemon/examples/ssh.service
       dest: /etc/avahi/services/
+
+ - name: "Install ssh admin access key"
+   authorized_key:
+      user: pi
+      state: present
+      key: "{{SSH_AUTHORIZED_KEY}}"
+   when: SSH_AUTHORIZED_KEY is defined
