@@ -236,6 +236,8 @@ class SD(Command):
 
     def setup_boot(self):
         with self.mounted("boot") as chroot:
+            chroot.cleanup_raspbian_boot()
+
             # WiFi configuration
             # Write a wifi.ini that will be processed by `himblick wifi-setup` on boot
             wifi_config = chroot.abspath("wifi.ini")
@@ -244,17 +246,6 @@ class SD(Command):
                     fd.write(self.settings.WIFI_CONFIG.lstrip())
             elif os.path.exists(wifi_config):
                 os.unlink(wifi_config)
-
-            # Remove ' init=/usr/lib/raspi-config/init_resize.sh' from cmdline.txt
-            # This is present by default in raspbian to perform partition
-            # resize on the first boot, and it removes itself and reboots after
-            # running. We do not need it, as we do our own partition resizing.
-            # Also, we can't keep it, since we remove raspi-config and the
-            # init_resize.sh script would break without it
-            chroot.file_contents_replace(
-                    relpath="cmdline.txt",
-                    search=" init=/usr/lib/raspi-config/init_resize.sh",
-                    replace="")
 
     def save_apt_cache(self, chroot: Chroot):
         """
@@ -296,6 +287,8 @@ class SD(Command):
 
     def setup_rootfs(self):
         with self.mounted("rootfs") as chroot:
+            chroot.cleanup_raspbian_rootfs()
+
             self.restore_apt_cache(chroot)
 
             # Generate SSH host keys
@@ -310,16 +303,6 @@ class SD(Command):
                 subprocess.run(["ssh-keygen", "-A", "-f", chroot.root], check=True)
             else:
                 subprocess.run(["tar", "-C", ssh_dir, "-axf", self.settings.SSH_HOST_KEYS], check=True)
-
-            # To support multiple arm systems, ld.so.preload tends to contain something like:
-            # /usr/lib/arm-linux-gnueabihf/libarmmem-${PLATFORM}.so
-            # I'm not sure where that ${PLATFORM} would be expanded, but it
-            # does not happen in a chroot/nspawn. Since we know we're working
-            # on the 4B, we can expand it ourselves.
-            chroot.file_contents_replace(
-                    relpath="/etc/ld.so.preload",
-                    search="${PLATFORM}",
-                    replace="aarch64")
 
             # Update apt cache
             apt_cache = chroot.abspath("/var/cache/apt/pkgcache.bin")
@@ -341,10 +324,9 @@ class SD(Command):
             #
             # See https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=895550)
             chroot.systemctl_enable("himblick_wifi_setup.service")
-            chroot.systemctl_disable("apply_noobs_os_config.service")
-            chroot.systemctl_disable("regenerate_ssh_host_keys.service")
-            chroot.systemctl_disable("sshswitch.service")
-            chroot.systemctl_enable("ssh.service")
+
+            # Enable ssh
+            self.systemctl_enable("ssh.service")
 
             # Make sure ansible is installed in the chroot
             chroot.apt_install("ansible")

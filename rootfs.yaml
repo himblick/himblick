@@ -1,7 +1,6 @@
 ---
 - hosts: all
   roles:
-   - raspbian_clean
    - base
   tasks:
    - name: "Install exfat drivers"

@@ -148,3 +148,61 @@ class Chroot:
             return
 
         self.run(cmd)
+
+    def dpkg_purge(self, pkglist: Union[str, List[str]]):
+        """
+        Deinstall and purge the given package(s), if they are installed
+        """
+        if isinstance(pkglist, str):
+            pkglist = [pkglist]
+
+        cmd = ["dpkg", "--purge"]
+        has_packages = False
+        for pkg in pkglist:
+            if not os.path.exists(os.path.join(self.root, "var", "lib", "dpkg", "info", pkg + ".list")):
+                continue
+            cmd.append(pkg)
+            has_packages = True
+
+        if not has_packages:
+            return
+
+        self.run(cmd)
+
+    def cleanup_raspbian_boot(self):
+        """
+        Remove the interactive raspbian customizations from the boot partition
+        """
+        # Remove ' init=/usr/lib/raspi-config/init_resize.sh' from cmdline.txt
+        # This is present by default in raspbian to perform partition
+        # resize on the first boot, and it removes itself and reboots after
+        # running. We do not need it, as we do our own partition resizing.
+        # Also, we can't keep it, since we remove raspi-config and the
+        # init_resize.sh script would break without it
+        self.file_contents_replace(
+                relpath="cmdline.txt",
+                search=" init=/usr/lib/raspi-config/init_resize.sh",
+                replace="")
+
+    def cleanup_raspbian_rootfs(self):
+        """
+        Remove the interactive raspbian customizations from the rootfs
+        partition
+        """
+        # To support multiple arm systems, ld.so.preload tends to contain something like:
+        # /usr/lib/arm-linux-gnueabihf/libarmmem-${PLATFORM}.so
+        # I'm not sure where that ${PLATFORM} would be expanded, but it
+        # does not happen in a chroot/nspawn. Since we know we're working
+        # on the 4B, we can expand it ourselves.
+        self.file_contents_replace(
+                relpath="/etc/ld.so.preload",
+                search="${PLATFORM}",
+                replace="aarch64")
+
+        # Deinstall unneeded Raspbian packages
+        self.dpkg_purge(["raspberrypi-net-mods", "raspi-config", "triggerhappy"])
+
+        # Disable services we do not need
+        self.systemctl_disable("apply_noobs_os_config.service")
+        self.systemctl_disable("regenerate_ssh_host_keys.service")
+        self.systemctl_disable("sshswitch.service")
