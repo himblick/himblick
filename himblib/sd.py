@@ -318,6 +318,9 @@ class SD(Command):
             if chroot.copy_if_unchanged(self.settings.HIMBLICK_PACKAGE, dst_pkgfile):
                 chroot.run(["apt", "-y", "--no-install-recommends", "--reinstall", "install", dst_pkgfile])
 
+            # Install what host-setup needs
+            chroot.apt_install("keyboard-configuration")
+
             # Do the systemd unit manipulation here, because it does not work
             # in ansible's playbook, as systemd is not started in the chroot
             # and ansible requires it even to enable units, even if it
@@ -354,8 +357,6 @@ class SD(Command):
 
             # Vars to pass to the ansible playbook
             playbook_vars = {
-                "KEYBOARD_LAYOUT": self.settings.KEYBOARD_LAYOUT,
-                "TIMEZONE": self.settings.TIMEZONE,
                 "HOSTNAME": self.args.hostname or self.settings.HOSTNAME,
             }
             if self.settings.SSH_AUTHORIZED_KEY:

@@ -1,3 +1,0 @@
----
- - name: "dpkg-reconfigure keyboard-configuration"
-   command: /usr/sbin/dpkg-reconfigure -f noninteractive keyboard-configuration

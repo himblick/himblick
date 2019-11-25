@@ -22,11 +22,5 @@ SSH_AUTHORIZED_KEY = None
 # Himblick Debian package to install in the raspbian system
 HIMBLICK_PACKAGE = "../himblick_1.0-1_all.deb"
 
-# Keyboard layout to configure
-KEYBOARD_LAYOUT = "us"
-
-# Timezone to configure
-TIMEZONE = "Europe/Berlin"
-
 # Host name
 HOSTNAME = "himblick"
