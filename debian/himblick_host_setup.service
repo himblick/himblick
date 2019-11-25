@@ -1,0 +1,14 @@
+[Unit]
+Description=Configure host based on /boot/himblick.conf
+ConditionPathExists=/boot/himblick.conf
+Before=wpa_supplicant@wlan0.service
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/himblick host-setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=basic.target

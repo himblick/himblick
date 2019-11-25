@@ -13,8 +13,8 @@ def main():
     from himblib.sd import SD
     SD.make_subparser(subparsers)
 
-    from himblib.wifi_setup import WifiSetup
-    WifiSetup.make_subparser(subparsers)
+    from himblib.host_setup import HostSetup
+    HostSetup.make_subparser(subparsers)
 
     from himblib.player import Player
     Player.make_subparser(subparsers)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 from typing import List, Union
+from contextlib import contextmanager
+import tempfile
 import subprocess
 import shutil
 import os
@@ -29,6 +31,27 @@ class Chroot:
         if create:
             os.makedirs(res, exist_ok=True)
         return res
+
+    def write_file(self, relpath: str, contents: str):
+        """
+        Write/replace the file with the given content
+        """
+        dest = self.abspath(relpath)
+        os.makedirs(os.path.basename(dest), exist_ok=True)
+        if os.path.lexists(dest):
+            os.unlink(dest)
+        with open(dest, "wt") as fd:
+            fd.write(contents)
+
+    def write_symlink(self, relpath: str, target: str):
+        """
+        Write/replace the file with a symlink to the given target
+        """
+        dest = self.abspath(relpath)
+        os.makedirs(os.path.basename(dest), exist_ok=True)
+        if os.path.lexists(dest):
+            os.unlink(dest)
+        os.symlink(target, dest)
 
     def file_contents_replace(self, relpath: str, search: str, replace: str) -> bool:
         """
@@ -97,25 +120,45 @@ class Chroot:
             shutil.copytree(src, dest)
         else:
             shutil.copy(src, dest)
-            
+
+    @contextmanager
+    def working_resolvconf(self, relpath: str):
+        abspath = self.abspath(relpath)
+        if os.path.lexists(abspath):
+            fd, tmppath = tempfile.mkstemp(dir=os.path.dirname(abspath))
+            os.close(fd)
+            os.rename(abspath, tmppath)
+            shutil.copy("/etc/resolv.conf", os.path.join(self.root, "etc/resolv.conf"))
+        else:
+            tmppath = None
+        try:
+            yield
+        finally:
+            if os.path.lexists(abspath):
+                os.unlink(abspath)
+            if tmppath is not None:
+                os.rename(tmppath, abspath)
+
     def systemctl_enable(self, unit: str):
         """
         Enable (and if needed unmask) the given systemd unit
         """
-        env = dict(os.environ)
-        env["LANG"] = "C"
-        subprocess.run(["systemctl", "--root=" + self.root, "enable", unit], check=True, env=env)
-        subprocess.run(["systemctl", "--root=" + self.root, "unmask", unit], check=True, env=env)
+        with self.working_resolvconf("/etc/resolv.conf"):
+            env = dict(os.environ)
+            env["LANG"] = "C"
+            subprocess.run(["systemctl", "--root=" + self.root, "enable", unit], check=True, env=env)
+            subprocess.run(["systemctl", "--root=" + self.root, "unmask", unit], check=True, env=env)
 
     def systemctl_disable(self, unit: str, mask=True):
         """
         Disable (and optionally mask) the given systemd unit
         """
-        env = dict(os.environ)
-        env["LANG"] = "C"
-        subprocess.run(["systemctl", "--root=" + self.root, "disable", unit], check=True, env=env)
-        if mask:
-            subprocess.run(["systemctl", "--root=" + self.root, "mask", unit], check=True, env=env)
+        with self.working_resolvconf("/etc/resolv.conf"):
+            env = dict(os.environ)
+            env["LANG"] = "C"
+            subprocess.run(["systemctl", "--root=" + self.root, "disable", unit], check=True, env=env)
+            if mask:
+                subprocess.run(["systemctl", "--root=" + self.root, "mask", unit], check=True, env=env)
 
     def run(self, cmd: List[str], check=True, **kw) -> subprocess.CompletedProcess:
         """
@@ -127,7 +170,8 @@ class Chroot:
         if "env" not in kw:
             kw["env"] = dict(os.environ)
             kw["env"]["LANG"] = "C"
-        return subprocess.run(chroot_cmd, check=check, **kw)
+        with self.working_resolvconf("/etc/resolv.conf"):
+            return subprocess.run(chroot_cmd, check=check, **kw)
 
     def apt_install(self, pkglist: Union[str, List[str]]):
         """
@@ -200,9 +244,34 @@ class Chroot:
                 replace="aarch64")
 
         # Deinstall unneeded Raspbian packages
-        self.dpkg_purge(["raspberrypi-net-mods", "raspi-config", "triggerhappy"])
+        self.dpkg_purge(["raspberrypi-net-mods", "raspi-config", "triggerhappy", "dhcpcd5", "ifupdown"])
 
         # Disable services we do not need
-        self.systemctl_disable("apply_noobs_os_config.service")
-        self.systemctl_disable("regenerate_ssh_host_keys.service")
-        self.systemctl_disable("sshswitch.service")
+        self.systemctl_disable("apply_noobs_os_config")
+        self.systemctl_disable("regenerate_ssh_host_keys")
+        self.systemctl_disable("sshswitch")
+
+        # Enable systemd-network and systemd-resolvd
+        self.systemctl_disable("wpa_supplicant")
+        self.systemctl_enable("wpa_supplicant@wlan0")
+        self.systemctl_enable("systemd-networkd")
+        self.write_symlink("/etc/resolv.conf", "/run/systemd/resolve/stub-resolv.conf")
+        self.systemctl_enable("systemd-resolved")
+        self.write_file("/etc/systemd/network/wlan0.network", """[Match]
+Name=wlan0
+
+[Network]
+DHCP=ipv4
+
+[DHCP]
+RouteMetric=20
+""")
+        self.write_file("/etc/systemd/network/eth0.network", """[Match]
+Name=eth0
+
+[Network]
+DHCP=all
+
+[DHCP]
+RouteMetric=10
+""")

@@ -239,14 +239,14 @@ class SD(Command):
         with self.mounted("boot") as chroot:
             chroot.cleanup_raspbian_boot()
 
-            # WiFi configuration
-            # Write a wifi.ini that will be processed by `himblick wifi-setup` on boot
-            wifi_config = chroot.abspath("wifi.ini")
-            if self.settings.WIFI_CONFIG:
-                with open(wifi_config, "wt") as fd:
-                    fd.write(self.settings.WIFI_CONFIG.lstrip())
-            elif os.path.exists(wifi_config):
-                os.unlink(wifi_config)
+            # Himblick host configuration
+            # Write a himblick.conf that will be processed by `himblick host-setup` on boot
+            host_config = chroot.abspath("himblick.conf")
+            if self.settings.HIMBLICK_HOST_CONFIG:
+                with open(host_config, "wt") as fd:
+                    fd.write(self.settings.HIMBLICK_HOST_CONFIG.lstrip())
+            elif os.path.exists(host_config):
+                os.unlink(host_config)
 
     def save_apt_cache(self, chroot: Chroot):
         """
@@ -324,7 +324,7 @@ class SD(Command):
             # documents that it doesn't.
             #
             # See https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=895550)
-            chroot.systemctl_enable("himblick_wifi_setup.service")
+            chroot.systemctl_enable("himblick_host_setup.service")
 
             # Enable ssh
             chroot.systemctl_enable("ssh.service")

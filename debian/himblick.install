@@ -1,1 +1,1 @@
-debian/himblick_wifi_setup.service lib/systemd/system/
+debian/himblick_host_setup.service lib/systemd/system/

@@ -6,8 +6,8 @@ BASE_IMAGE = "images/raspbian-buster-lite.img"
 # ssh public key to install in authorized_keys
 SSH_ADMIN_KEYS = [os.path.expanduser("~/.ssh/id_rsa.pub")]
 
-# Himblick /boot/wifi.ini configuration
-WIFI_CONFIG = None
+# Himblick /boot/himblick.conf configuration
+HIMBLICK_HOST_CONFIG = None
 
 # Set this to a directory used to cache intermediate bits
 CACHE_DIR = None
