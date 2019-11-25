@@ -327,7 +327,7 @@ class SD(Command):
             chroot.systemctl_enable("himblick_wifi_setup.service")
 
             # Enable ssh
-            self.systemctl_enable("ssh.service")
+            chroot.systemctl_enable("ssh.service")
 
             # Make sure ansible is installed in the chroot
             chroot.apt_install("ansible")
