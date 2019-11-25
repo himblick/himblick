@@ -41,6 +41,8 @@ class SD(Command):
                             help="configuration file to load")
         parser.add_argument("--hostname", action="store", metavar="hostname",
                             help="hostname to use")
+        parser.add_argument("--force", "-f", action="store_true",
+                            help="do not ask for confirmation before destructive operations")
         parser.add_argument("--shell", action="store_true",
                             help="open a shell inside the rootfs")
         parser.add_argument("--locate", action="store_true",
@@ -53,6 +55,8 @@ class SD(Command):
                             help="update the partition layout")
         parser.add_argument("--setup", action="store", nargs="?", const="all",
                             help="set up the system partition")
+        parser.add_argument("--provision", action="store_true",
+                            help="provision a new SD card (write-image, partition, setup)")
         return parser
 
     def __init__(self, args):
@@ -399,6 +403,17 @@ class SD(Command):
 
             self.save_apt_cache(chroot)
 
+    def confirm_operation(self, dev, operation):
+        """
+        Ask for confirmation before performing a destructive operation on a
+        device
+        """
+        if self.args.force:
+            return True
+        res = input(
+                f"{operation} {dev['path']} ({dev['vendor']} {dev['model']} {format_gb(dev['size'])} (y/N)? ")
+        return res.lower() == "y"
+
     def run(self):
         """
         Set up an imblick private image
@@ -417,10 +432,14 @@ class SD(Command):
             self.umount(dev)
         elif self.args.write_image:
             dev = self.locate()
+            if not self.confirm_operation(dev, "Write image to"):
+                return 1
             self.umount(dev)
             self.write_image(dev)
         elif self.args.partition:
             dev = self.locate()
+            if not self.confirm_operation(dev, "Adjust partitioning of"):
+                return 1
             self.umount(dev)
             self.partition(dev)
         elif self.args.setup:
@@ -428,5 +447,14 @@ class SD(Command):
                 self.setup_boot()
             if self.args.setup in ("rootfs", "all"):
                 self.setup_rootfs()
+        elif self.args.provision:
+            dev = self.locate()
+            if not self.confirm_operation(dev, "Provision"):
+                return 1
+            self.umount(dev)
+            self.write_image(dev)
+            self.partition(dev)
+            self.setup_boot()
+            self.setup_rootfs()
         else:
             raise Fail("No command given: try --help")
