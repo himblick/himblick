@@ -123,6 +123,10 @@ class Chroot:
 
     @contextmanager
     def working_resolvconf(self, relpath: str):
+        """
+        Temporarily replace /etc/resolv.conf in the chroot with the current
+        system one
+        """
         abspath = self.abspath(relpath)
         if os.path.lexists(abspath):
             fd, tmppath = tempfile.mkstemp(dir=os.path.dirname(abspath))
