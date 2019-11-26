@@ -7,7 +7,10 @@ BASE_IMAGE = "images/raspbian-buster-lite.img"
 SSH_ADMIN_KEYS = [os.path.expanduser("~/.ssh/id_rsa.pub")]
 
 # Himblick /boot/himblick.conf configuration
-HIMBLICK_HOST_CONFIG = None
+HIMBLICK_HOST_CONFIG = """
+[general]
+name = himblick
+"""
 
 # Set this to a directory used to cache intermediate bits
 CACHE_DIR = None
@@ -21,6 +24,3 @@ SSH_AUTHORIZED_KEY = None
 
 # Himblick Debian package to install in the raspbian system
 HIMBLICK_PACKAGE = "../himblick_1.0-1_all.deb"
-
-# Host name
-HOSTNAME = "himblick"

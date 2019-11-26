@@ -1,8 +1,4 @@
 ---
- - name: "set hostname"
-   hostname:
-     name: "{{HOSTNAME}}"
-
  - name: "Disable ssh password authentication"
    lineinfile:
       path: /etc/ssh/sshd_config

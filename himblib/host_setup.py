@@ -1,12 +1,14 @@
 from __future__ import annotations
+from typing import List
 from .cmdline import Command
 import logging
 import configparser
 import subprocess
 import shlex
 import io
-import sys
 import os
+import sys
+import textwrap
 from .utils import atomic_writer
 
 log = logging.getLogger(__name__)
@@ -32,6 +34,37 @@ class HostSetup(Command):
         super().__init__(*args, **kw)
         self.config = configparser.ConfigParser()
         self.config.read(self.args.config)
+
+    def write_file(self, abspath: str, content: str, chmod=0o644):
+        """
+        Write the given content to a file
+        """
+        if self.args.dry_run:
+            print(f"{abspath}:")
+            sys.stdout.write(textwrap.indent(content, "  "))
+        else:
+            with atomic_writer(abspath, "wt", chmod=chmod) as fd:
+                fd.write(content)
+
+    def write_symlink(self, abspath: str, target: str):
+        """
+        Create the given symlink pointing to ``target``
+        """
+        if self.args.dry_run:
+            print(f"{abspath} -> {target}")
+        else:
+            if os.path.lexists(abspath):
+                os.unlink(abspath)
+            os.symlink(target, abspath)
+
+    def cmd(self, cmd: List[str], check: bool = True, **kw) -> subprocess.CompletedProcess:
+        """
+        Run a command
+        """
+        if self.args.dry_run:
+            print("run: " + " ".join(shlex.quote(x) for x in cmd))
+        else:
+            return subprocess.run(cmd, check=check, **kw)
 
     def configure_wpasupplicant(self):
         def print_section(essid, psk, file=None):
@@ -61,15 +94,9 @@ class HostSetup(Command):
 
             wpa_config = fd.getvalue()
 
-        dest = "/etc/wpa_supplicant/wpa_supplicant-wlan0.conf"
         if self.args.dry_run:
-            print(f" * {dest}")
-            sys.stdout.write(wpa_config)
-        else:
-            with atomic_writer(dest, "wt", chmod=0o600) as fd:
-                fd.write(wpa_config)
-
-        os.sync()
+            print(" * wifi")
+        self.write_file("/etc/wpa_supplicant/wpa_supplicant-wlan0.conf", wpa_config, chmod=0o600)
 
     def configure_keyboard(self):
         layout = self.config["general"].get("keyboard layout")
@@ -98,40 +125,41 @@ class HostSetup(Command):
 
         if replaced:
             if self.args.dry_run:
-                print(f" * {conffile}")
-                for line in lines:
-                    print(line)
-            else:
-                with atomic_writer(conffile, "wt", chmod=0o644) as fd:
-                    for line in lines:
-                        print(line, file=fd)
-
-                subprocess.run(
-                        ["/usr/sbin/dpkg-reconfigure", "-f", "noninteractive", "keyboard-configuration"],
-                        check=True)
+                print(" * keyboard")
+            self.write_file(conffile, "\n".join(lines) + "\n")
+            self.cmd(["/usr/sbin/dpkg-reconfigure", "-f", "noninteractive", "keyboard-configuration"])
 
     def configure_timezone(self):
         timezone = self.config["general"].get("timezone")
         if timezone is None:
             return
 
-        link_target = os.path.join("/usr/share/zoneinfo/", timezone)
-
         if self.args.dry_run:
             print(" * timezone")
-            print("/etc/localtime -> " + shlex.quote(link_target))
-            print("/etc/timezone: " + timezone)
-        else:
-            # Regenerate the localtime symlink
-            if os.path.exists("/etc/localtime"):
-                os.unlink("/etc/localtime")
-            os.symlink(link_target, "/etc/localtime")
 
-            # Regenerate the timezone name in /etc/timezone
-            with atomic_writer("/etc/timezone", "wt", chmod=0o644) as fd:
-                print(timezone, file=fd)
+        self.write_symlink(
+                "/etc/localtime",
+                os.path.join("/usr/share/zoneinfo/", timezone))
+        self.write_file(
+                "/etc/timezone",
+                timezone + "\n")
+
+        # TODO: timedatectl?
+
+    def configure_hostname(self):
+        hostname = self.config["general"].get("name")
+        if hostname is None:
+            return
+        if self.args.dry_run:
+            print(" * hostname")
+        self.write_file("/etc/hostname", hostname + "\n")
+        self.cmd(["hostname", hostname])
+
+        # TODO: 'hostnamectl'?
 
     def run(self):
         self.configure_wpasupplicant()
         self.configure_keyboard()
         self.configure_timezone()
+        self.configure_hostname()
+        os.sync()
