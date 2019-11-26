@@ -7,6 +7,7 @@ import shutil
 import os
 import shlex
 import logging
+import yaml
 
 log = logging.getLogger(__name__)
 
@@ -279,3 +280,68 @@ DHCP=all
 [DHCP]
 RouteMetric=10
 """)
+
+    def run_ansible(self, playbook, roles, host_vars):
+        """
+        Run ansible inside the chroot
+        """
+        # We cannot simply use ansible's chroot connector, since ansible does
+        # not mount /dev, /proc and so on in chroots, so many packages fail to
+        # install
+        #
+        # We work around it coping all ansible needs inside the rootfs, then
+        # using systemd-nspawn to run ansible inside it using the `local`
+        # connector.
+        #
+        # Local files lookups won't work, and we need to copy everything the
+        # playbooks need inside the chroot in advance.
+        #
+        # systemd ansible operations still don't work, see
+        # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=895550)
+        # so playbooks cannot use the 'systemd' module, and those operations
+        # need to be performed directly in himblick instead
+
+        # Make sure ansible is installed in the chroot
+        self.apt_install("ansible")
+
+        # Create an ansible environment inside the rootfs
+        ansible_dir = self.abspath("/srv/himblick/ansible", create=True)
+
+        # Copy the ansible playbook and roles
+        self.copy_to("rootfs.yaml", "/srv/himblick/ansible")
+        self.copy_to("roles", "/srv/himblick/ansible")
+
+        # Write the variables
+        vars_file = os.path.join(ansible_dir, "himblick-vars.yaml")
+        with open(vars_file, "wt") as fd:
+            yaml.dump(host_vars, fd)
+
+        # Write ansible's inventory
+        ansible_inventory = os.path.join(ansible_dir, "inventory.ini")
+        with open(ansible_inventory, "wt") as fd:
+            print("[rootfs]", file=fd)
+            print("localhost ansible_connection=local", file=fd)
+
+        # Write ansible's config
+        ansible_cfg = os.path.join(ansible_dir, "ansible.cfg")
+        with open(ansible_cfg, "wt") as fd:
+            print("[defaults]", file=fd)
+            print("nocows = 1", file=fd)
+            print("inventory = inventory.ini", file=fd)
+            print("[inventory]", file=fd)
+            # See https://github.com/ansible/ansible/issues/48859
+            print("enable_plugins = ini", file=fd)
+
+        # Write ansible's startup script
+        args = ["exec", "ansible-playbook", "-v", "rootfs.yaml"]
+        ansible_sh = os.path.join(ansible_dir, "rootfs.sh")
+        with open(ansible_sh, "wt") as fd:
+            print("#!/bin/sh", file=fd)
+            print("set -xue", file=fd)
+            print('cd $(dirname -- "$0")', file=fd)
+            print("export ANSIBLE_CONFIG=ansible.cfg", file=fd)
+            print(" ".join(shlex.quote(x) for x in args), file=fd)
+        os.chmod(ansible_sh, 0o755)
+
+        # Run ansible
+        self.run(["/srv/himblick/ansible/rootfs.sh"], check=True)
