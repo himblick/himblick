@@ -37,9 +37,13 @@
        - x11-xserver-utils
        - xinit
        - openbox
+       - xterm
+       - caffeine
+       - lightdm
        - omxplayer
        - okular
-       - lightdm
+       - feh
+       - libreoffice-impress
       state: present
       update_cache: no
       install_recommends: no
