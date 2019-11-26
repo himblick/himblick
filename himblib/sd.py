@@ -336,14 +336,13 @@ class SD(Command):
 
             # Vars to pass to the ansible playbook
             playbook_vars = {
-                "HOSTNAME": self.args.hostname or self.settings.HOSTNAME,
             }
             if self.settings.SSH_AUTHORIZED_KEY:
                 with open(self.settings.SSH_AUTHORIZED_KEY, "rt") as fd:
                     playbook_vars["SSH_AUTHORIZED_KEY"] = fd.read()
 
             # TODO: take playbook and roles names from config?
-            self.chroot.run_ansible("rootfs.yaml", "roles", playbook_vars)
+            chroot.run_ansible("rootfs.yaml", "roles", playbook_vars)
 
             self.save_apt_cache(chroot)
 
