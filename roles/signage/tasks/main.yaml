@@ -54,6 +54,12 @@
       regexp: ".*autologin-user\\s*=\\s*($|pi)"
       line: "autologin-user = pi"
 
+ - name: "Disable mouse cursor in X"
+   lineinfile:
+      path: /etc/lightdm/lightdm.conf
+      regexp: "(^|#)xserver-command\\s*=\\s*"
+      line: "xserver-command = X -nocursor"
+
  - name: "Use himblick player as X session"
    copy:
       dest: /home/pi/.xsession
