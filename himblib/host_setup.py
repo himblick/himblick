@@ -143,8 +143,7 @@ class HostSetup(Command):
         self.write_file(
                 "/etc/timezone",
                 timezone + "\n")
-
-        # TODO: timedatectl?
+        self.cmd(["timedatectl", "set-timezone", timezone])
 
     def configure_hostname(self):
         hostname = self.config["general"].get("name")
@@ -154,8 +153,8 @@ class HostSetup(Command):
             print(" * hostname")
         self.write_file("/etc/hostname", hostname + "\n")
         self.cmd(["hostname", hostname])
-
-        # TODO: 'hostnamectl'?
+        self.cmd(["hostnamectl", "set-hostname", hostname])
+        self.cmd(["hostnamectl", "set-chassis", "embedded"])
 
     def run(self):
         self.configure_wpasupplicant()

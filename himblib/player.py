@@ -171,15 +171,17 @@ class Player(Command):
         """
         Find the presentation to play from a given media directory
         """
+        if not os.path.isdir(path):
+            return None
         pdf = PDFPresentation()
         videos = VideoPresentation()
         images = ImagePresentation()
         odp = ODPPresentation()
         all_players = [pdf, videos, images, odp]
 
-        for fn in os.listdir(self.args.media):
-            abspath = os.path.abspath(os.path.join(self.args.media, fn))
-            path, ext = os.path.splitext(fn)
+        for fn in os.listdir(path):
+            abspath = os.path.abspath(os.path.join(path, fn))
+            base, ext = os.path.splitext(fn)
             mimetype = mimetypes.types_map.get(ext)
             if mimetype is None:
                 log.info("%s: mime type unknown", fn)
@@ -201,18 +203,20 @@ class Player(Command):
         return player
 
     def run(self):
+        # Errors go to the logs, which go to stderr, which is saved in
+        # ~/.xsession-errors
         mimetypes.init()
-        # TODO: how do we report errors?
 
         # Try mounting the media directory
         # Little hack because we can't yet have exFAT mounted automatically at boto
         # TODO: distinguish media directories that need no mounting from those
         # that do, and give error if those that do could not be mounted
-        subprocess.run(["mount", self.args.media], stderr=subprocess.DEVNULL, check=False)
+        subprocess.run(["sudo", "mount", self.args.media], stderr=subprocess.DEVNULL, check=False)
 
         # TODO: monitor media directory for changes
 
-        current_dir = os.path.join(self.args.media, "current")
+        # current_dir = os.path.join(self.args.media, "current")
+        current_dir = self.args.media
         logo_dir = os.path.join(self.args.media, "logo")
 
         # First look into the 'current' directory
