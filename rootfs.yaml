@@ -54,3 +54,12 @@
         path: /etc/lightdm/lightdm.conf
         regexp: ".*autologin-user\\s*=\\s*($|pi)"
         line: "autologin-user = pi"
+
+   - name: "Use himblick player as X session"
+     copy:
+        dest: /home/pi/.xsession
+        owner: pi
+        group: pi
+        mode: '0644'
+        content: |
+            exec /usr/bin/himblick player
