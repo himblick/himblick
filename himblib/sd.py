@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Dict, Any
 from .cmdline import Command, Fail
 from .chroot import Chroot
+from .settings import Settings
 from contextlib import contextmanager
 import subprocess
 import json
@@ -35,8 +36,9 @@ class SD(Command):
     @classmethod
     def make_subparser(cls, subparsers):
         parser = super().make_subparser(subparsers)
-        parser.add_argument("--config", "-C", action="store", metavar="settings.py",
-                            help="configuration file to load")
+        parser.add_argument("--config", "-C", action="store", metavar="file.conf",
+                            default="himblick.conf",
+                            help="configuration file to load (default: himblick.conf)")
         parser.add_argument("--hostname", action="store", metavar="hostname",
                             help="hostname to use")
         parser.add_argument("--force", "-f", action="store_true",
@@ -59,14 +61,7 @@ class SD(Command):
 
     def __init__(self, args):
         super().__init__(args)
-        self.settings = self.load_settings()
-
-    def load_settings(self):
-        from .settings import Settings
-        settings = Settings()
-        if self.args.config is not None:
-            settings.load(self.args.config)
-        return settings
+        self.settings = Settings(self.args.config)
 
     def locate(self) -> Dict[str, Any]:
         """
@@ -243,12 +238,7 @@ class SD(Command):
 
             # Himblick host configuration
             # Write a himblick.conf that will be processed by `himblick host-setup` on boot
-            host_config = chroot.abspath("himblick.conf")
-            if self.settings.HIMBLICK_HOST_CONFIG:
-                with open(host_config, "wt") as fd:
-                    fd.write(self.settings.HIMBLICK_HOST_CONFIG.lstrip())
-            elif os.path.exists(host_config):
-                os.unlink(host_config)
+            chroot.write_file("himblick.conf", self.settings.non_provision_settings)
 
     def save_apt_cache(self, chroot: Chroot):
         """
@@ -301,7 +291,7 @@ class SD(Command):
                 if fn.startswith("ssh_host_") and fn.endswith("_key"):
                     os.unlink(os.path.join(ssh_dir, fn))
             # Install or generate new ones
-            if self.settings.SSH_HOST_KEYS is None:
+            if not self.settings.SSH_HOST_KEYS:
                 # Generate new ones
                 subprocess.run(["ssh-keygen", "-A", "-f", chroot.root], check=True)
             else:

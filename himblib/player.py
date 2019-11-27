@@ -80,10 +80,13 @@ class PDFPresentation(SingleFileMixin, Presentation):
         log.info("%s: PDF presentation", self.fname)
         self.hide_cursor()
 
+        confdir = os.path.expanduser("~/.config")
+        os.makedirs(confdir, exist_ok=True)
+
         # TODO: configure slide advance time
 
         # Configure okular
-        with open(os.path.expanduser("~/.config/okularpartrc"), "wt") as fd:
+        with open(os.path.expanduser(os.path.join(confdir, "okularpartrc")), "wt") as fd:
             print("[Core Presentation]", file=fd)
             print("SlidesAdvance=true", file=fd)
             print("SlidesAdvanceTime=2", file=fd)
@@ -92,7 +95,7 @@ class PDFPresentation(SingleFileMixin, Presentation):
             print("SlidesShowProgress=false", file=fd)
             # print("SlidesTransition=GlitterRight", file=fd)
 
-        with open(os.path.expanduser("~/.config/okular.kmessagebox"), "wt") as fd:
+        with open(os.path.expanduser(os.path.join(confdir, "okular.kmessagebox")), "wt") as fd:
             print("[General]", file=fd)
             print("presentationInfo=4", file=fd)
 
@@ -129,6 +132,7 @@ class VideoPresentation(SingleFileMixin, Presentation):
 
 class ImagePresentation(FileGroupMixin, Presentation):
     def run(self):
+        self.files.sort()
         log.info("Image presentation of %d images", len(self.files))
         with tempfile.NamedTemporaryFile("wt") as tf:
             for fname in self.files:
