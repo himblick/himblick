@@ -22,12 +22,12 @@
       mode: 0755
 
  - name: "Configure mounting media directory"
-   mount:
-      src: /dev/disk/by-label/media
-      path: /srv/media
-      fstype: exfat
-      opts: uid=1000,gid=1000,fmask=113,dmask=007,rw,noatime,noauto
-      state: present
+   copy:
+      src: srv-media.mount
+      dest: /etc/systemd/system/srv-media.mount
+      owner: root
+      group: root
+      mode: 0644
 
  - name: "Install media player dependencies"
    apt:

@@ -1,0 +1,14 @@
+[Unit]
+Description=Media Directory (/srv/media)
+Before=local-fs.target
+After=sys-fs-fuse-connections.mount
+
+[Mount]
+What=/dev/disk/by-label/media
+Where=/srv/media
+Type=exfat
+Options=uid=1000,gid=1000,fmask=113,dmask=007,rw,noatime,nosuid,nodev
+ExecStartPre=-/sbin/fsck.exfat -a /dev/disk/by-label/media
+
+[Install]
+WantedBy=local-fs.target

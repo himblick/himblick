@@ -241,12 +241,6 @@ class Player(Command):
 
         self.configure_screen()
 
-        # Try mounting the media directory
-        # Little hack because we can't yet have exFAT mounted automatically at boto
-        # TODO: distinguish media directories that need no mounting from those
-        # that do, and give error if those that do could not be mounted
-        run(["sudo", "mount", self.args.media], stderr=subprocess.DEVNULL, check=False)
-
         # TODO: monitor media directory for changes
 
         # current_dir = os.path.join(self.args.media, "current")
