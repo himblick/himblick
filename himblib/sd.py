@@ -240,6 +240,15 @@ class SD(Command):
             # Write a himblick.conf that will be processed by `himblick host-setup` on boot
             chroot.write_file("himblick.conf", self.settings.non_provision_settings)
 
+            # Disable fsck on boot
+            with chroot.edit_kernel_commandline() as parts:
+                try:
+                    parts.remove("fsck.repair=yes")
+                except ValueError:
+                    pass
+                if "fsck.mode=skip" not in parts:
+                    parts.append("fsck.mode=skip")
+
     def save_apt_cache(self, chroot: Chroot):
         """
         Copy .deb files from the apt cache in the rootfs to our local cache
