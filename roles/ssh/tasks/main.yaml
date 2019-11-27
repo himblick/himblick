@@ -17,3 +17,85 @@
       state: present
       key: "{{SSH_AUTHORIZED_KEY}}"
    when: SSH_AUTHORIZED_KEY is defined
+
+ - name: "Create the media group"
+   group:
+      name: media
+      gid: 1001
+      state: present
+
+ - name: "Create the media user"
+   user:
+      name: media
+      uid: 1001
+      group: media
+      state: present
+
+ - name: "Install ssh media access key"
+   authorized_key:
+      user: media
+      state: present
+      key: "{{SSH_MEDIA_PUBLIC_KEY}}"
+   when: SSH_MEDIA_PUBLIC_KEY is defined
+
+ - name: "Install media access key for the pi user"
+   copy:
+      dest: "/home/pi/.ssh/id_media"
+      content: "{{SSH_MEDIA_PRIVATE_KEY}}"
+      owner: pi
+      group: pi
+      mode: 0600
+   when: SSH_MEDIA_PRIVATE_KEY is defined
+
+ - name: "Add pi to the media group"
+   user:
+      name: pi
+      group: media
+
+ - name: "Create the chroot jail for media: /srv"
+   file:
+      path: "/srv"
+      state: directory
+      owner: root
+      group: root
+      mode: 0755
+
+ - name: "Create the chroot jail for media: /srv/jail"
+   file:
+      path: "/srv/jail"
+      state: directory
+      owner: root
+      group: root
+      mode: 0755
+
+ - name: "Create the chroot jail for media: /srv/jail/media"
+   file:
+      path: "/srv/jail/media"
+      state: directory
+      owner: root
+      group: media
+      mode: 0755
+
+ - name: "Bind mount /srv/media under /srv/jail/media"
+   copy:
+      src: srv-jail-media.mount
+      dest: /etc/systemd/system/srv-jail-media.mount
+      owner: root
+      group: root
+      mode: 0644
+
+ - name: "Configure sftp to use internal implementation"
+   lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: ".*Subsystem\\s+sftp"
+      line: "Subsystem sftp internal-sftp"
+
+ - name: "Configure sftp chroot jail for user media"
+   blockinfile:
+      path: /etc/ssh/sshd_config
+      block: |
+         Match User media
+              ChrootDirectory /srv/jail
+              AllowTcpForwarding no
+              X11Forwarding no
+              ForceCommand internal-sftp

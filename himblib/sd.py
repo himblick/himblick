@@ -348,12 +348,21 @@ class SD(Command):
                 with open(self.settings.SSH_AUTHORIZED_KEY, "rt") as fd:
                     playbook_vars["SSH_AUTHORIZED_KEY"] = fd.read()
 
+            if self.settings.provision("ssh media public key"):
+                with open(self.settings.provision("ssh media public key"), "rt") as fd:
+                    playbook_vars["SSH_MEDIA_PUBLIC_KEY"] = fd.read()
+
+            if self.settings.provision("ssh media private key"):
+                with open(self.settings.provision("ssh media private key"), "rt") as fd:
+                    playbook_vars["SSH_MEDIA_PRIVATE_KEY"] = fd.read()
+
             # TODO: take playbook and roles names from config?
             chroot.run_ansible("rootfs.yaml", "roles", playbook_vars)
 
             # Enable the /srv/media mount point, which ansible, as we run it
             # now, is unable to do
             chroot.systemctl_enable("srv-media.mount")
+            chroot.systemctl_enable("srv-jail-media.mount")
 
             # This is needed otherwise okular and evince cannot show PDF files
             # It is still unclear to me why it is not automatically ok in the

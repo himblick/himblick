@@ -6,7 +6,8 @@ After=srv-media.target
 [Mount]
 What=/srv/media
 Where=/srv/jail/media
-Type=bind
+Type=none
+Options=bind
 
 [Install]
 WantedBy=local-fs.target
