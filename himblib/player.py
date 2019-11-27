@@ -1,5 +1,8 @@
 from __future__ import annotations
+from typing import List
 from .cmdline import Command
+from .settings import Settings
+import re
 import subprocess
 import mimetypes
 import os
@@ -10,6 +13,11 @@ import time
 import logging
 
 log = logging.getLogger(__name__)
+
+
+def run(cmd: List[str], check: bool = True, **kw) -> subprocess.CompletedProcess:
+    log.info("Run %s", " ".join(shlex.quote(x) for x in cmd))
+    return subprocess.run(cmd, check=check, **kw)
 
 
 class Presentation:
@@ -29,8 +37,7 @@ class Presentation:
         #
         # See also: https://stackoverflow.com/questions/10885337/inhibit-screensaver-with-python
         cmd = ["caffeinate", "--"] + cmd
-        log.info("Run %s", " ".join(shlex.quote(x) for x in cmd))
-        subprocess.run(cmd, **kw)
+        run(cmd, **kw)
 
 
 class SingleFileMixin:
@@ -169,7 +176,14 @@ class Player(Command):
         parser = super().make_subparser(subparsers)
         parser.add_argument("--media", action="store", metavar="dir", default="/srv/media",
                             help="media directory")
+        parser.add_argument("--config", "-C", action="store", metavar="file.conf",
+                            default="/boot/himblick.conf",
+                            help="configuration file to read (default: /boot/himblick.conf)")
         return parser
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.settings = Settings(self.args.config)
 
     def find_presentation(self, path):
         """
@@ -206,16 +220,40 @@ class Player(Command):
             return None
         return player
 
+    def configure_screen(self):
+        """
+        Configure the screen based on himblick.conf
+        """
+        # Set screen orientation
+        orientation = self.settings.general("screen orientation")
+        if orientation:
+            run(["xrandr", "--orientation", orientation])
+
+        mode = self.settings.general("screen mode")
+        if mode:
+            res = run(["xrandr", "--query"], capture_output=True, text=True)
+            re_output = re.compile(r"^(\S+) connected ")
+            for line in res.stdout.splitlines():
+                mo = re_output.match(line)
+                if mo:
+                    output_name = mo.group(1)
+                    break
+            else:
+                output_name = None
+            run(["xrandr", "--output", output_name, "--mode", mode])
+
     def run(self):
         # Errors go to the logs, which go to stderr, which is saved in
         # ~/.xsession-errors
         mimetypes.init()
 
+        self.configure_screen()
+
         # Try mounting the media directory
         # Little hack because we can't yet have exFAT mounted automatically at boto
         # TODO: distinguish media directories that need no mounting from those
         # that do, and give error if those that do could not be mounted
-        subprocess.run(["sudo", "mount", self.args.media], stderr=subprocess.DEVNULL, check=False)
+        run(["sudo", "mount", self.args.media], stderr=subprocess.DEVNULL, check=False)
 
         # TODO: monitor media directory for changes
 
