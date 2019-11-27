@@ -123,6 +123,8 @@ class HostSetup(Command):
                 print(" * keyboard")
             self.write_file(conffile, "\n".join(lines) + "\n")
             self.cmd(["/usr/sbin/dpkg-reconfigure", "-f", "noninteractive", "keyboard-configuration"])
+            # https://unix.stackexchange.com/questions/290449/how-to-reload-xserver-after-a-change-in-keyboard-layout
+            self.cmd(["udevadm", "trigger", "--subsystem-match=input", "--action=change"])
 
     def configure_timezone(self):
         timezone = self.settings.general("timezone")
