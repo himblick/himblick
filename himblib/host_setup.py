@@ -1,8 +1,8 @@
 from __future__ import annotations
 from typing import List
 from .cmdline import Command
+from .settings import Settings
 import logging
-import configparser
 import subprocess
 import shlex
 import io
@@ -25,15 +25,14 @@ class HostSetup(Command):
         parser = super().make_subparser(subparsers)
         parser.add_argument("--config", "-C", action="store", metavar="file.conf",
                             default="/boot/himblick.conf",
-                            help="configuration file to read (default: /boot/wifi.ini)")
+                            help="configuration file to read (default: /boot/himblick.conf)")
         parser.add_argument("--dry-run", "-n", action="store_true",
                             help="print configuration changes to standard output, but do not perform them")
         return parser
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        self.config = configparser.ConfigParser()
-        self.config.read(self.args.config)
+        self.settings = Settings(self.args.config)
 
     def write_file(self, abspath: str, content: str, chmod=0o644):
         """
@@ -73,8 +72,8 @@ class HostSetup(Command):
             print(f"    psk={psk}", file=file)
             print("}", file=file)
 
-        wifi_country = self.config["general"].get("wifi country")
-        if wifi_country is None:
+        wifi_country = self.settings.general("wifi country")
+        if not wifi_country:
             return
 
         with io.StringIO() as fd:
@@ -82,11 +81,7 @@ class HostSetup(Command):
             # print("update_config=1", file=fd)
             print(f"country={wifi_country}", file=fd)
 
-            for section in self.config.sections():
-                if not section.startswith("wifi "):
-                    continue
-                values = self.config[section]
-                essid = section[5:].strip()
+            for essid, values in self.settings.wifis():
                 if 'hash' in values:
                     print_section(essid, values["hash"], file=fd)
                 elif 'password' in values:
@@ -99,8 +94,8 @@ class HostSetup(Command):
         self.write_file("/etc/wpa_supplicant/wpa_supplicant-wlan0.conf", wpa_config, chmod=0o600)
 
     def configure_keyboard(self):
-        layout = self.config["general"].get("keyboard layout")
-        if layout is None:
+        layout = self.settings.general("keyboard layout")
+        if not layout:
             return
 
         conffile = "/etc/default/keyboard"
@@ -130,8 +125,8 @@ class HostSetup(Command):
             self.cmd(["/usr/sbin/dpkg-reconfigure", "-f", "noninteractive", "keyboard-configuration"])
 
     def configure_timezone(self):
-        timezone = self.config["general"].get("timezone")
-        if timezone is None:
+        timezone = self.settings.general("timezone")
+        if not timezone:
             return
 
         if self.args.dry_run:
@@ -146,8 +141,8 @@ class HostSetup(Command):
         self.cmd(["timedatectl", "set-timezone", timezone])
 
     def configure_hostname(self):
-        hostname = self.config["general"].get("name")
-        if hostname is None:
+        hostname = self.generak("name")
+        if not hostname:
             return
         if self.args.dry_run:
             print(" * hostname")

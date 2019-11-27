@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Generator, Tuple, Dict
 import logging
 import configparser
 
@@ -51,24 +52,41 @@ class Settings:
                     non_provision_settings_lines.append(line)
         self.non_provision_settings = "".join(non_provision_settings_lines)
 
+    def general(self, key: str) -> str:
+        return self.cfg["general"].get(key, "")
+
+    def provision(self, key: str) -> str:
+        return self.cfg["provision"].get(key, "")
+
+    def wifis(self) -> Generator[Tuple[str, Dict[str, str]]]:
+        """
+        Iterate essid, {key: val} for each
+        """
+        for section in self.cfg.sections():
+            if not section.startswith("wifi "):
+                continue
+            essid = section[5:].strip()
+            values = self.cfg[section]
+            yield essid, values
+
     # Compatibility accessors
 
     @property
     def BASE_IMAGE(self):
-        return self.cfg["provision"]["base image"]
+        return self.provision("base image")
 
     @property
     def SSH_HOST_KEYS(self):
-        return self.cfg["provision"]["ssh host keys"]
+        return self.provision("ssh host keys")
 
     @property
     def SSH_AUTHORIZED_KEY(self):
-        return self.cfg["provision"]["ssh authorized key"]
+        return self.provision("ssh authorized key")
 
     @property
     def HIMBLICK_PACKAGE(self):
-        return self.cfg["provision"]["himblick package"]
+        return self.provision("himblick package")
 
     @property
     def CACHE_DIR(self):
-        return self.cfg["provision"]["cache dir"]
+        return self.provision("cache dir")
