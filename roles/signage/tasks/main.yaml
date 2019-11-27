@@ -32,18 +32,28 @@
  - name: "Install media player dependencies"
    apt:
       pkg:
+      # sets governor to ondemand at boot
        - cpufrequtils
+      # basic system support not strictly needed
+       - libnss-systemd
+       - libpam-cap
+      # basic X server
        - xserver-xorg
-       - x11-xserver-utils
-       - xinit
+       # - xinit
        - openbox
        - xterm
-       - caffeine
+       - fonts-droid-fallback
+       - fonts-liberation2
+       - xfonts-base
        - lightdm
+      # himblick player dependencies
+       - x11-xserver-utils  # for xrandr
+       - caffeine
        - vlc
        - okular
        - feh
        - libreoffice-impress
+       - libreoffice-avmedia-backend-vlc
       state: present
       update_cache: no
       install_recommends: no
