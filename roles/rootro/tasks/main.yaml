@@ -1,16 +1,22 @@
 ---
+# We have 4G ram and we can do without a swapfile.
+# Also, avoid wear on the SD card
  - name: "Remove dphys-swapfile"
    apt:
       pkg:
        - dphys-swapfile
       state: absent
       purge: yes
+
+# We are disabling fsck at boot, so we don't need fake-hwclock
  - name: "Remove fake-hwclock"
    apt:
       pkg:
        - fake-hwclock
       state: absent
       purge: yes
+
+# There is already journald, which should also play well with a readonly root
  - name: "Remove rsyslog"
    apt:
       pkg:
