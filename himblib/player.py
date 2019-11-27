@@ -145,7 +145,7 @@ class ImagePresentation(FileGroupMixin, Presentation):
 class ODPPresentation(SingleFileMixin, Presentation):
     def run(self):
         log.info("%s: ODP presentation", self.fname)
-        self.run_player(["loimpress", "--nodefault", "--norestore", "--nologo", "--show", self.fname])
+        self.run_player(["loimpress", "--nodefault", "--norestore", "--nologo", "--nolockcheck", "--show", self.fname])
 
 
 class LogoPresentation(Presentation):
