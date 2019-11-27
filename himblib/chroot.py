@@ -54,6 +54,25 @@ class Chroot:
             os.unlink(dest)
         os.symlink(target, dest)
 
+    @contextmanager
+    def edit_kernel_commandline(self, fname="cmdline.txt"):
+        """
+        Manipulate the kernel command line as an editable list.
+
+        If the list gets changed, it is written back.
+        """
+        dest = self.abspath(fname)
+        with open(dest, "rt") as fd:
+            line = fd.read().strip()
+
+        line_split = line.split()
+        yield line_split
+
+        new_line = " ".join(line_split)
+        if new_line != line:
+            with open(dest, "wt") as fd:
+                print(new_line, file=fd)
+
     def file_contents_replace(self, relpath: str, search: str, replace: str) -> bool:
         """
         Replace ``search`` with ``replace`` in ``relpath``.
@@ -228,10 +247,11 @@ class Chroot:
         # running. We do not need it, as we do our own partition resizing.
         # Also, we can't keep it, since we remove raspi-config and the
         # init_resize.sh script would break without it
-        self.file_contents_replace(
-                relpath="cmdline.txt",
-                search=" init=/usr/lib/raspi-config/init_resize.sh",
-                replace="")
+        with self.edit_kernel_commandline() as parts:
+            try:
+                parts.remove("init=/usr/lib/raspi-config/init_resize.sh")
+            except ValueError:
+                pass
 
     def cleanup_raspbian_rootfs(self):
         """
