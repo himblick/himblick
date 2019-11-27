@@ -115,26 +115,18 @@ class PDFPresentation(SingleFileMixin, Presentation):
         self.run_player(["okular", "--presentation", "--", self.fname])
 
 
-class VideoPresentation(SingleFileMixin, Presentation):
-    cmdlines = [
-        ["omxplayer", "-loop", "-r", "--"],
-        ["mplayer", "-loop", "0", "-fs", "-fixed-vo", "--"],
-    ]
-
-    def __init__(self):
-        super().__init__()
-        self.player = None
-        for cmd in self.cmdlines:
-            path = shutil.which(cmd[0])
-            if path is not None:
-                self.player = [path] + cmd[1:]
-                break
-        else:
-            raise RuntimeError("video player not found")
-
+class VideoPresentation(FileGroupMixin, Presentation):
     def run(self):
-        log.info("%s: video presentation", self.fname)
-        self.run_player(self.player + [self.fname])
+        self.files.sort()
+        log.info("Video presentation of %d videos", len(self.files))
+        with tempfile.NamedTemporaryFile("wt", suffix=".vlc") as tf:
+            for fname in self.files:
+                print(fname, file=tf)
+            tf.flush()
+
+            self.run_player(
+                    ["cvlc", "--no-audio", "--loop", "--fullscreen",
+                        "--video-on-top", "--no-video-title-show", tf.name])
 
 
 class ImagePresentation(FileGroupMixin, Presentation):
