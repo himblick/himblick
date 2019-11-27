@@ -143,7 +143,7 @@ class HostSetup(Command):
         self.cmd(["timedatectl", "set-timezone", timezone])
 
     def configure_hostname(self):
-        hostname = self.generak("name")
+        hostname = self.general("name")
         if not hostname:
             return
         if self.args.dry_run:
