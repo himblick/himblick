@@ -338,6 +338,9 @@ class SD(Command):
             # Enable ssh
             chroot.systemctl_enable("ssh.service")
 
+            # Do not wait for being online to finish boot
+            chroot.systemctl_disable("systemd-networkd-wait-online.service", mask=True)
+
             # Vars to pass to the ansible playbook
             playbook_vars = {
             }
