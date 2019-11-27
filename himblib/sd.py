@@ -343,6 +343,12 @@ class SD(Command):
             # TODO: take playbook and roles names from config?
             chroot.run_ansible("rootfs.yaml", "roles", playbook_vars)
 
+            # This is needed otherwise okular and evince cannot show PDF files
+            # It is still unclear to me why it is not automatically ok in the
+            # raspbian system
+            if time.time() - chroot.getmtime("/usr/share/mime/mime.cache") > 86400:
+                chroot.run(["update-mime-database", "/usr/share/mime"], check=True)
+
             self.save_apt_cache(chroot)
 
     def confirm_operation(self, dev, operation):

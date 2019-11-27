@@ -33,6 +33,15 @@ class Chroot:
             os.makedirs(res, exist_ok=True)
         return res
 
+    def getmtime(self, relpath: str) -> float:
+        """
+        Get the mtime of a file inside the chroot, or 0 if it does not exist
+        """
+        try:
+            return os.path.getmtime(self.abspath(relpath))
+        except FileNotFoundError:
+            return 0
+
     def write_file(self, relpath: str, contents: str):
         """
         Write/replace the file with the given content
