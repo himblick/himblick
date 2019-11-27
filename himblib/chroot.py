@@ -38,7 +38,7 @@ class Chroot:
         Write/replace the file with the given content
         """
         dest = self.abspath(relpath)
-        os.makedirs(os.path.basename(dest), exist_ok=True)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
         if os.path.lexists(dest):
             os.unlink(dest)
         with open(dest, "wt") as fd:
