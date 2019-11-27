@@ -1,0 +1,12 @@
+[Unit]
+Description=Media Directory in sftp jail (/srv/jail/media)
+Before=local-fs.target
+After=srv-media.target
+
+[Mount]
+What=/srv/media
+Where=/srv/jail/media
+Type=bind
+
+[Install]
+WantedBy=local-fs.target
