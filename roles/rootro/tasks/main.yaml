@@ -1,0 +1,19 @@
+---
+ - name: "Remove dphys-swapfile"
+   apt:
+      pkg:
+       - dphys-swapfile
+      state: absent
+      purge: yes
+ - name: "Remove fake-hwclock"
+   apt:
+      pkg:
+       - fake-hwclock
+      state: absent
+      purge: yes
+ - name: "Remove rsyslog"
+   apt:
+      pkg:
+       - rsyslog
+      state: absent
+      purge: yes

@@ -3,5 +3,6 @@
   vars_files: "himblick-vars.yaml"
   roles:
    - base
+   - rootro
    - ssh
    - signage
