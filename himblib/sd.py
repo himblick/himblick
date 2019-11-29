@@ -340,8 +340,18 @@ class SD(Command):
                 continue
             shutil.copy(src, dest)
 
+    @contextmanager
+    def mount_rootfs(self):
+        with self.mounted("boot") as boot:
+            with self.mounted("rootfs") as rootfs:
+                run(["mount", "--bind", boot.root, rootfs.abspath("/boot")])
+                try:
+                    yield rootfs
+                finally:
+                    run(["umount", rootfs.abspath("/boot")])
+
     def setup_rootfs(self):
-        with self.mounted("rootfs") as chroot:
+        with self.mount_rootfs() as chroot:
             chroot.cleanup_raspbian_rootfs()
 
             self.restore_apt_cache(chroot)
@@ -436,7 +446,9 @@ class SD(Command):
             self.cache = Cache(self.settings.CACHE_DIR)
 
         if self.args.shell:
-            with self.mounted("rootfs") as chroot:
+            dev = self.locate()
+            self.umount(dev)
+            with self.mount_rootfs() as chroot:
                 chroot.run([])
         elif self.args.locate:
             print(self.locate()["path"])
