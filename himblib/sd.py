@@ -96,15 +96,17 @@ class SD(Command):
         os.makedirs(rules_dir, exist_ok=True)
         rule_file = os.path.join(rules_dir, "90-udisks-inhibit-" + devpath.replace("/", "_") + ".rules")
         with open(rule_file, "wt") as fd:
-            print('SUBSYSTEM=="block", DEVNAME="' + devpath + '*", ENV{UDISKS_IGNORE}="1"', file=fd)
+            print('SUBSYSTEM=="block", ENV{DEVNAME}=="' + devpath + '*", ENV{UDISKS_IGNORE}="1"', file=fd)
+            fd.flush()
+            os.fsync(fd.fileno())
         run(["udevadm", "control", "--reload"])
-        run(["udevadm", "trigger", "--subsystem-match=block"])
+        run(["udevadm", "trigger", "--settle", "--subsystem-match=block"])
         try:
             yield
         finally:
             os.unlink(rule_file)
             run(["udevadm", "control", "--reload"])
-            run(["udevadm", "trigger", "--subsystem-match=block"])
+            run(["udevadm", "trigger", "--settle", "--subsystem-match=block"])
 
     def locate_partition(self, label):
         dev = self.locate()
