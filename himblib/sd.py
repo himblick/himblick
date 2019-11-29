@@ -243,16 +243,40 @@ class SD(Command):
                            " reset it with --write-image and rerun --partition")
 
     @contextmanager
+    def ext4_dir_index_workaround(self, part):
+        """
+        Temporarily disable dir_index of the ext4 filesystem to work around the
+        issue at https://lkml.org/lkml/2018/12/27/155
+        """
+        is_ext4 = part["fstype"] == "ext4"
+        if is_ext4:
+            log.info("Disabling dir_index on %s to workaround https://lkml.org/lkml/2018/12/27/155", part["path"])
+            run(["tune2fs", "-O", "^dir_index", part["path"]])
+
+        try:
+            yield
+        finally:
+            if is_ext4:
+                log.info("Reenabling dir_index on %s", part["path"])
+                run(["tune2fs", "-O", "dir_index", part["path"]])
+                log.info("Running e2fsck to reindex directories on %s", part["path"])
+                run(["e2fsck", "-f", part["path"]])
+
+    @contextmanager
     def mounted(self, label):
         part = self.locate_partition(label)
-        if part["mountpoint"] is None:
+
+        if part["mountpoint"] is not None:
+            raise RuntimeError(f"please call this function while the {label} filesystem is unmounted")
+
+        with self.ext4_dir_index_workaround(part):
             log.info("Mounting %s partition %s", label, part["path"])
             run(["udisksctl", "mount", "-b", part["path"]], stdout=subprocess.DEVNULL)
             part = self.locate_partition(label)
 
-        yield Chroot(part["mountpoint"])
+            yield Chroot(part["mountpoint"])
 
-        run(["udisksctl", "unmount", "-b", part["path"]], stdout=subprocess.DEVNULL)
+            run(["udisksctl", "unmount", "-b", part["path"]], stdout=subprocess.DEVNULL)
 
     def setup_boot(self):
         with self.mounted("boot") as chroot:
@@ -386,11 +410,7 @@ class SD(Command):
             chroot.systemctl_enable("srv-media.mount")
             chroot.systemctl_enable("srv-jail-media.mount")
 
-            # This is needed otherwise okular and evince cannot show PDF files
-            # It is still unclear to me why it is not automatically ok in the
-            # raspbian system
-            if time.time() - chroot.getmtime("/usr/share/mime/mime.cache") > 86400:
-                chroot.run(["update-mime-database", "/usr/share/mime"], check=True)
+            # chroot.run(["e2fsck", "-f", "/usr/share/mime"], check=True)
 
             self.save_apt_cache(chroot)
 
