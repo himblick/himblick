@@ -84,6 +84,28 @@ class SD(Command):
             raise Fail(f"{len(devs)} SD cards found")
         return devs[0]
 
+    @contextmanager
+    def pause_automounting(self, dev: Dict[str, Any]):
+        """
+        Pause automounting on the device for the duration of this context
+        manager
+        """
+        # See /usr/lib/udisks2/udisks2-inhibit
+        devpath = dev["path"]
+        rules_dir = "/run/udev/rules.d"
+        os.makedirs(rules_dir, exist_ok=True)
+        rule_file = os.path.join(rules_dir, "90-udisks-inhibit-" + devpath.replace("/", "_") + ".rules")
+        with open(rule_file, "wt") as fd:
+            print('SUBSYSTEM=="block", DEVNAME="' + devpath + '*", ENV{UDISKS_IGNORE}="1"', file=fd)
+        run(["udevadm", "control", "--reload"])
+        run(["udevadm", "trigger", "--subsystem-match=block"])
+        try:
+            yield
+        finally:
+            os.unlink(rule_file)
+            run(["udevadm", "control", "--reload"])
+            run(["udevadm", "trigger", "--subsystem-match=block"])
+
     def locate_partition(self, label):
         dev = self.locate()
         for part in dev["children"]:
@@ -410,20 +432,25 @@ class SD(Command):
             if not self.confirm_operation(dev, "Adjust partitioning of"):
                 return 1
             self.umount(dev)
-            self.partition(dev)
+            with self.pause_automounting(dev):
+                self.partition(dev)
         elif self.args.setup:
-            if self.args.setup in ("boot", "all"):
-                self.setup_boot()
-            if self.args.setup in ("rootfs", "all"):
-                self.setup_rootfs()
+            dev = self.locate()
+            self.umount(dev)
+            with self.pause_automounting(dev):
+                if self.args.setup in ("boot", "all"):
+                    self.setup_boot()
+                if self.args.setup in ("rootfs", "all"):
+                    self.setup_rootfs()
         elif self.args.provision:
             dev = self.locate()
             if not self.confirm_operation(dev, "Provision"):
                 return 1
             self.umount(dev)
-            self.write_image(dev)
-            self.partition(dev)
-            self.setup_boot()
-            self.setup_rootfs()
+            with self.pause_automounting(dev):
+                self.write_image(dev)
+                self.partition(dev)
+                self.setup_boot()
+                self.setup_rootfs()
         else:
             raise Fail("No command given: try --help")
