@@ -16,17 +16,25 @@ log = logging.getLogger(__name__)
 
 
 def run(cmd: List[str], check: bool = True, **kw) -> subprocess.CompletedProcess:
+    """
+    Logging wrapper to subprocess.run.
+
+    Also, default check to True.
+    """
     log.info("Run %s", " ".join(shlex.quote(x) for x in cmd))
     return subprocess.run(cmd, check=check, **kw)
 
 
 class Presentation:
-    def hide_cursor(self):
-        # TODO: http://www.noah.org/wiki/cursor_disable_in_X11
-        # instead of subprocess.run(["unclutter", "-idle", "0", "-noevents", "-root"])
-        pass
+    """
+    Base class for all presentation types
+    """
 
     def run_player(self, cmd, **kw):
+        """
+        Run a media player command line, performing other common actions if
+        needed
+        """
         # Run things under caffeinate
         #
         # If it is not sufficient, others do:
@@ -85,7 +93,6 @@ class EmptyPresentation(Presentation):
 class PDFPresentation(SingleFileMixin, Presentation):
     def run(self):
         log.info("%s: PDF presentation", self.fname)
-        self.hide_cursor()
 
         confdir = os.path.expanduser("~/.config")
         os.makedirs(confdir, exist_ok=True)
@@ -102,6 +109,7 @@ class PDFPresentation(SingleFileMixin, Presentation):
             print("SlidesShowProgress=false", file=fd)
             # print("SlidesTransition=GlitterRight", file=fd)
 
+        # Silence a too-helpful first-time-run informational message
         with open(os.path.expanduser(os.path.join(confdir, "okular.kmessagebox")), "wt") as fd:
             print("[General]", file=fd)
             print("presentationInfo=4", file=fd)
