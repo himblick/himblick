@@ -82,6 +82,27 @@ class Chroot:
             with open(dest, "wt") as fd:
                 print(new_line, file=fd)
 
+    @contextmanager
+    def edit_text_file(self, fname: str):
+        """
+        Edit a file by manipulating an array with its lines.
+
+        Lines are automatically rstripped.
+
+        If the list gets changed, it is written back.
+        """
+        dest = self.abspath(fname)
+        with open(dest, "rt") as fd:
+            lines = [line.rstrip() for line in fd]
+
+        orig_lines = list(lines)
+        yield lines
+
+        if orig_lines != lines:
+            with open(dest, "wt") as fd:
+                for line in lines:
+                    print(line, file=fd)
+
     def file_contents_replace(self, relpath: str, search: str, replace: str) -> bool:
         """
         Replace ``search`` with ``replace`` in ``relpath``.
@@ -312,6 +333,30 @@ DHCP=all
 [DHCP]
 RouteMetric=10
 """)
+
+    def setup_readonly_root(self):
+        """
+        Setup a readonly root with a tempfs overlay
+        """
+        # Set up a readonly root using dracut's 'rootovl' feature.
+        # Eventually do this with systemd's systemd.volatile=overlay option.
+        # See https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=945596
+        self.apt_install("dracut")
+        self.write_file("/etc/dracut.conf.d/overlay.conf", "filesystems+=overlay")
+        self.run(["dracut", "--force", "/boot/initrd.img", "4.19.75-v7l+"])
+        with self.edit_kernel_commandline("/boot/cmdline.txt") as parts:
+            # Add 'rootovl' to /etc/cmdline
+            if "rootovl" not in parts:
+                parts.append("rootovl")
+
+                # See https://www.freedesktop.org/software/systemd/man/kernel-command-line.html
+                # if "systemd.volatile=overlay" not in parts:
+                #     parts.append("systemd.volatile=overlay")
+
+        # Add initramfs initrd.img to config.txt
+        with self.edit_text_file("/boot/config.txt") as lines:
+            if "initramfs initrd.img" not in lines:
+                lines.append("initramfs initrd.img")
 
     def run_ansible(self, playbook, roles, host_vars):
         """

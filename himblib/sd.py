@@ -297,11 +297,6 @@ class SD(Command):
                 if "fsck.mode=skip" not in parts:
                     parts.append("fsck.mode=skip")
 
-                # Mount rootfs readonly
-                # See https://www.freedesktop.org/software/systemd/man/kernel-command-line.html
-                if "systemd.volatile=overlay" not in parts:
-                    parts.append("systemd.volatile=overlay")
-
     def save_apt_cache(self, chroot: Chroot):
         """
         Copy .deb files from the apt cache in the rootfs to our local cache
@@ -353,6 +348,7 @@ class SD(Command):
     def setup_rootfs(self):
         with self.mount_rootfs() as chroot:
             chroot.cleanup_raspbian_rootfs()
+            chroot.setup_readonly_root()
 
             self.restore_apt_cache(chroot)
 
