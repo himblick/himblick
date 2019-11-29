@@ -1,14 +1,27 @@
 from __future__ import annotations
+from typing import List
 import logging
 import os
 import tempfile
 import sys
+import subprocess
+import shlex
 try:
     import progressbar
 except ModuleNotFoundError:
     progressbar = None
 
 log = logging.getLogger(__name__)
+
+
+def run(cmd: List[str], check: bool = True, **kw) -> subprocess.CompletedProcess:
+    """
+    Logging wrapper to subprocess.run.
+
+    Also, default check to True.
+    """
+    log.info("Run %s", " ".join(shlex.quote(x) for x in cmd))
+    return subprocess.run(cmd, check=check, **kw)
 
 
 class atomic_writer(object):

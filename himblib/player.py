@@ -1,28 +1,16 @@
 from __future__ import annotations
-from typing import List
 from .cmdline import Command
 from .settings import Settings
+from .utils import run
 import re
-import subprocess
 import mimetypes
 import os
 import shutil
-import shlex
 import tempfile
 import time
 import logging
 
 log = logging.getLogger(__name__)
-
-
-def run(cmd: List[str], check: bool = True, **kw) -> subprocess.CompletedProcess:
-    """
-    Logging wrapper to subprocess.run.
-
-    Also, default check to True.
-    """
-    log.info("Run %s", " ".join(shlex.quote(x) for x in cmd))
-    return subprocess.run(cmd, check=check, **kw)
 
 
 class Presentation:
