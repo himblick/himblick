@@ -130,16 +130,8 @@ class HostSetup(Command):
         timezone = self.settings.general("timezone")
         if not timezone:
             return
-
         if self.args.dry_run:
             print(" * timezone")
-
-        self.write_symlink(
-                "/etc/localtime",
-                os.path.join("/usr/share/zoneinfo/", timezone))
-        self.write_file(
-                "/etc/timezone",
-                timezone + "\n")
         self.cmd(["timedatectl", "set-timezone", timezone])
 
     def configure_hostname(self):
@@ -148,10 +140,7 @@ class HostSetup(Command):
             return
         if self.args.dry_run:
             print(" * hostname")
-        self.write_file("/etc/hostname", hostname + "\n")
-        self.cmd(["hostname", hostname])
         self.cmd(["hostnamectl", "set-hostname", hostname])
-        self.cmd(["hostnamectl", "set-chassis", "embedded"])
 
     def run(self):
         self.configure_wpasupplicant()
