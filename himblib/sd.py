@@ -10,7 +10,7 @@ import logging
 import os
 import shutil
 import time
-from .utils import make_progressbar
+from .utils import make_progressbar, run
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class SD(Command):
 
         :returns: the lsblk data structure for the SD device
         """
-        res = subprocess.run(["lsblk", "-JOb"], text=True, capture_output=True, check=True)
+        res = run(["lsblk", "-JOb"], capture_output=True, check=True)
         res = json.loads(res.stdout)
         devs = []
         for dev in res["blockdevices"]:
@@ -101,7 +101,7 @@ class SD(Command):
             mp = part["mountpoint"]
             if not mp:
                 continue
-            subprocess.run(["umount", mp], check=True)
+            run(["umount", mp])
 
     def write_image(self, dev: Dict[str, Any]):
         """
@@ -191,8 +191,8 @@ class SD(Command):
             self.umount(self.locate())
             time.sleep(0.3)
 
-            subprocess.run(["e2fsck", "-fy", part_root.path], check=True)
-            subprocess.run(["resize2fs", part_root.path], check=True)
+            run(["e2fsck", "-fy", part_root.path])
+            run(["resize2fs", part_root.path])
 
         if part_media is None:
             # Get the last free space
@@ -211,11 +211,11 @@ class SD(Command):
             log.info("%s media partition created", format_gb(free_space.length * device.sectorSize))
 
             # Create exFAT file system
-            subprocess.run(["mkexfatfs", "-n", "media", partition.path], check=True)
+            run(["mkexfatfs", "-n", "media", partition.path])
             log.info("%s media partition formatted", format_gb(free_space.length * device.sectorSize))
         else:
             # Current parted cannot seem to deal with exfat, let's use exfatfsck instead
-            res = subprocess.run(["exfatfsck", "-n", partitions[2].path], capture_output=True, check=False)
+            res = run(["exfatfsck", "-n", partitions[2].path], capture_output=True)
             if res.returncode != 0:
                 raise Fail("SD media partition exFAT file system failed checks:"
                            " reset it with --write-image and rerun --partition")
@@ -225,12 +225,12 @@ class SD(Command):
         part = self.locate_partition(label)
         if part["mountpoint"] is None:
             log.info("Mounting %s partition %s", label, part["path"])
-            subprocess.run(["udisksctl", "mount", "-b", part["path"]], stdout=subprocess.DEVNULL, check=True)
+            run(["udisksctl", "mount", "-b", part["path"]], stdout=subprocess.DEVNULL)
             part = self.locate_partition(label)
 
         yield Chroot(part["mountpoint"])
 
-        subprocess.run(["udisksctl", "unmount", "-b", part["path"]], stdout=subprocess.DEVNULL, check=True)
+        run(["udisksctl", "unmount", "-b", part["path"]], stdout=subprocess.DEVNULL)
 
     def setup_boot(self):
         with self.mounted("boot") as chroot:
@@ -307,9 +307,9 @@ class SD(Command):
             # Install or generate new ones
             if not self.settings.SSH_HOST_KEYS:
                 # Generate new ones
-                subprocess.run(["ssh-keygen", "-A", "-f", chroot.root], check=True)
+                run(["ssh-keygen", "-A", "-f", chroot.root])
             else:
-                subprocess.run(["tar", "-C", ssh_dir, "-axf", self.settings.SSH_HOST_KEYS], check=True)
+                run(["tar", "-C", ssh_dir, "-axf", self.settings.SSH_HOST_KEYS])
 
             # Update apt cache
             apt_cache = chroot.abspath("/var/cache/apt/pkgcache.bin")
