@@ -195,11 +195,12 @@ class SD(Command):
         # TODO: check partition label, and error out if it exists and is not 'media'
 
         target_root_size = int(round(4 * 1024**3 / device.sectorSize))
-        need_root_resize = part_root.geometry.end - part_root.geometry.start - 16 < target_root_size
-        log.info("%s: partition is only %.1fGB and needs resizing",
-                 part_root.path, target_root_size * device.sectorSize / 1024**3)
-
+        need_root_resize = part_root.geometry.end - part_root.geometry.start < target_root_size - 16
         if need_root_resize:
+            log.info("%s: partition is only %.1fGB and needs resizing (current: %d, target: %d)",
+                     part_root.path, target_root_size * device.sectorSize / 1024**3,
+                     part_root.geometry.end - part_root.geometry.start, target_root_size)
+
             if part_media:
                 log.info("%s: partition needs resize: removing media partition %s", part_root.path, part_media.path)
                 disk.deletePartition(part_media)
