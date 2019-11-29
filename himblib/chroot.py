@@ -206,7 +206,7 @@ class Chroot:
         with self.working_resolvconf("/etc/resolv.conf"):
             return subprocess.run(chroot_cmd, check=check, **kw)
 
-    def apt_install(self, pkglist: Union[str, List[str]]):
+    def apt_install(self, pkglist: Union[str, List[str]], recommends=False):
         """
         Install the given package(s), if they are not installed yet
         """
@@ -214,6 +214,9 @@ class Chroot:
             pkglist = [pkglist]
 
         cmd = ["apt", "-y", "install"]
+        if not recommends:
+            cmd.append("--no-install-recommends")
+
         has_packages = False
         for pkg in pkglist:
             if os.path.exists(os.path.join(self.root, "var", "lib", "dpkg", "info", pkg + ".list")):
