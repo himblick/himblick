@@ -6,9 +6,17 @@ See this [series of posts](https://www.enricozini.org/blog/2019/himblick/) for d
 
 ## Depdendencies
 
+For sd:
+
 ```
 apt install python3-parted python3-progressbar exfat-utils \
             udisks2 wpasupplicant \
             qemu binfmt-support qemu-user-static systemd-container \
             qemu-system-arm
+```
+
+For player:
+
+```
+apt install python3-pyinotify
 ```
