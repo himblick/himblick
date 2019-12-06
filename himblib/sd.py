@@ -69,7 +69,7 @@ class SD(Command):
 
         :returns: the lsblk data structure for the SD device
         """
-        res = run(["lsblk", "-JOb"], capture_output=True, check=True)
+        res = run(["lsblk", "--json", "--output-all", "--bytes"], capture_output=True, check=True)
         res = json.loads(res.stdout)
         devs = []
         for dev in res["blockdevices"]:
