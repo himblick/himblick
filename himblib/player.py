@@ -5,9 +5,12 @@ from .utils import run
 import re
 import mimetypes
 import os
+import signal
 import shutil
+import shlex
 import tempfile
-import time
+import asyncio
+import pyinotify
 import logging
 
 log = logging.getLogger(__name__)
@@ -17,8 +20,17 @@ class Presentation:
     """
     Base class for all presentation types
     """
+    def __init__(self):
+        # Subprocess used to track the player
+        self.proc = None
 
-    def run_player(self, cmd, **kw):
+    def is_running(self):
+        """
+        Check if the presentation is still running
+        """
+        return self.proc is not None
+
+    async def run_player(self, cmd, **kw):
         """
         Run a media player command line, performing other common actions if
         needed
@@ -33,7 +45,23 @@ class Presentation:
         #
         # See also: https://stackoverflow.com/questions/10885337/inhibit-screensaver-with-python
         cmd = ["caffeinate", "--"] + cmd
-        run(cmd, **kw)
+        log.info("Run %s", " ".join(shlex.quote(x) for x in cmd))
+        self.proc = await asyncio.create_subprocess_exec(*cmd)
+        returncode = await self.proc.wait()
+        self.proc = None
+        log.info("player exited with return code %d", returncode)
+
+    async def stop(self):
+        log.info("Stopping player")
+        count = 0
+        sig = signal.SIGTERM
+        while self.proc is not None:
+            self.proc.send_signal(sig)
+            await asyncio.sleep(0.2)
+            count += 1
+            if count > 10:
+                sig = signal.SIGKILL
+        log.info("Player stopped")
 
 
 class SingleFileMixin:
@@ -72,14 +100,21 @@ class EmptyPresentation(Presentation):
     """
     Presentation doing nothing forever
     """
-    def run(self):
-        log.warn("Nothing to do: sleeping forever")
-        while True:
-            time.sleep(3600)
+    async def run(self):
+        log.info("Starting the empty presentation, doing nothing")
+        self.proc = asyncio.get_current_loop().create_future()
+        await self.proc
+        log.info("Empty presentation stopped")
+
+    async def stop(self):
+        log.info("Stopping the empty presentation")
+        self.proc.set_result(True)
+        self.proc = None
+        log.info("Stopped the empty presentation")
 
 
 class PDFPresentation(SingleFileMixin, Presentation):
-    def run(self):
+    async def run(self):
         log.info("%s: PDF presentation", self.fname)
 
         confdir = os.path.expanduser("~/.config")
@@ -108,11 +143,11 @@ class PDFPresentation(SingleFileMixin, Presentation):
         if os.path.isdir(docdata):
             shutil.rmtree(docdata)
 
-        self.run_player(["okular", "--presentation", "--", self.fname])
+        await self.run_player(["okular", "--presentation", "--", self.fname])
 
 
 class VideoPresentation(FileGroupMixin, Presentation):
-    def run(self):
+    async def run(self):
         self.files.sort()
         log.info("Video presentation of %d videos", len(self.files))
         with tempfile.NamedTemporaryFile("wt", suffix=".vlc") as tf:
@@ -120,13 +155,13 @@ class VideoPresentation(FileGroupMixin, Presentation):
                 print(fname, file=tf)
             tf.flush()
 
-            self.run_player(
+            await self.run_player(
                     ["cvlc", "--no-audio", "--loop", "--fullscreen",
                         "--video-on-top", "--no-video-title-show", tf.name])
 
 
 class ImagePresentation(FileGroupMixin, Presentation):
-    def run(self):
+    async def run(self):
         self.files.sort()
         log.info("Image presentation of %d images", len(self.files))
         with tempfile.NamedTemporaryFile("wt") as tf:
@@ -135,13 +170,14 @@ class ImagePresentation(FileGroupMixin, Presentation):
             tf.flush()
 
             # TODO: adjust slide advance time
-            self.run_player(["feh", "-f", tf.name, "-F", "-Y", "-D", "1.5"])
+            await self.run_player(["feh", "-f", tf.name, "-F", "-Y", "-D", "1.5"])
 
 
 class ODPPresentation(SingleFileMixin, Presentation):
-    def run(self):
+    async def run(self):
         log.info("%s: ODP presentation", self.fname)
-        self.run_player(["loimpress", "--nodefault", "--norestore", "--nologo", "--nolockcheck", "--show", self.fname])
+        await self.run_player(
+                ["loimpress", "--nodefault", "--norestore", "--nologo", "--nolockcheck", "--show", self.fname])
 
 
 class LogoPresentation(Presentation):
@@ -153,6 +189,63 @@ class LogoPresentation(Presentation):
 
     def run(self):
         self.run_player(["feh", "-F", "-Y", self.fname])
+
+
+class ChangeMonitor:
+    """
+    Trigger an event when a file is removed, then recreate the file
+    """
+    def __init__(self, queue: asyncio.Queue, media_dir: str, monitor_file_name: str = "remove-when-done"):
+        """
+        :arg queue: queue where we send notifications
+        :arg media_dir: directory where we manage the monitor file
+        :arg monitor_file_name: name to use for the monitor file
+        """
+        self.queue = queue
+        self.media_dir = os.path.abspath(media_dir)
+        self.monitor_file_name = monitor_file_name
+        self.monitor_file = os.path.join(self.media_dir, self.monitor_file_name)
+
+        # Set up pyinotify.
+        # See https://stackoverflow.com/questions/26414052/watch-for-a-file-with-asyncio
+        self.watch_manager = pyinotify.WatchManager()
+        self.watch = self.watch_manager.add_watch(self.media_dir, pyinotify.IN_DELETE)
+        self.notifier = pyinotify.AsyncioNotifier(
+                self.watch_manager, asyncio.get_event_loop(), default_proc_fun=self.on_event)
+
+        # Create the monitor file if it does not exist
+        if not os.path.exists(self.monitor_file):
+            self.create_monitor_file()
+
+    def create_monitor_file(self):
+        """
+        Create the file we use for monitoring
+        """
+        with open(self.monitor_file, "wt") as fd:
+            print("Remove this file when you want the player to rescan the media directory", file=fd)
+
+    def on_event(self, event):
+        """
+        Handle incoming asyncio events
+        """
+        # We can skip instantiating pyinotify.ProcessEvent, since we don't need
+        # dispatching
+
+        # Filter out spurious events
+        if event.path != self.media_dir:
+            log.warn("%s: event %r received for a directory we were not monitoring", event.path, event)
+            return
+
+        if event.name != self.monitor_file_name:
+            return
+
+        # We can shamelessly use put_nowait, since the queue has no size bound.
+        # This is handy because pyinotify does not seem to support async
+        # callbacks
+        self.queue.put_nowait(None)
+
+        # Recreate the monitor file, to be ready for the next notification
+        self.create_monitor_file()
 
 
 class Player(Command):
@@ -237,8 +330,9 @@ class Player(Command):
 
         self.configure_screen()
 
-        # TODO: monitor media directory for changes
+        asyncio.get_event_loop().run_until_complete(self.main_loop())
 
+    async def make_player(self):
         # current_dir = os.path.join(self.args.media, "current")
         current_dir = self.args.media
         logo_dir = os.path.join(self.args.media, "logo")
@@ -254,6 +348,14 @@ class Player(Command):
             log.warn("%s: no media found, doing nothing", logo_dir)
             pres = EmptyPresentation()
 
-        pres.run()
+        return pres
 
-#        - or configure lightdm to start X with nocursor option
+    async def main_loop(self):
+        queue = asyncio.Queue()
+        monitor = ChangeMonitor(queue, self.args.media)
+
+        while True:
+            player = await self.make_player()
+            await asyncio.wait((player.run(), queue.get()), return_when=asyncio.FIRST_COMPLETED)
+            if player.is_running():
+                await player.stop()
