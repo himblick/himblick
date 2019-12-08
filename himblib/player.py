@@ -5,7 +5,6 @@ from .utils import run
 import re
 import mimetypes
 import os
-import signal
 import shutil
 import shlex
 import tempfile
@@ -44,7 +43,7 @@ class Presentation:
         #   xset -dpms
         #
         # See also: https://stackoverflow.com/questions/10885337/inhibit-screensaver-with-python
-        cmd = ["caffeinate", "--"] + cmd
+        cmd = ["caffeinate", "--", "systemd-run", "--scope", "--slice=himblick-player", "--user"] + cmd
         log.info("Run %s", " ".join(shlex.quote(x) for x in cmd))
         self.proc = await asyncio.create_subprocess_exec(*cmd)
         returncode = await self.proc.wait()
@@ -53,14 +52,7 @@ class Presentation:
 
     async def stop(self):
         log.info("Stopping player")
-        count = 0
-        sig = signal.SIGTERM
-        while self.proc is not None:
-            self.proc.send_signal(sig)
-            await asyncio.sleep(0.2)
-            count += 1
-            if count > 10:
-                sig = signal.SIGKILL
+        run(["systemctl", "--user", "stop", "himblick-player.slice"])
         log.info("Player stopped")
 
 
