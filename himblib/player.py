@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 from .cmdline import Command
 from .settings import Settings
 from .utils import run
@@ -19,9 +20,7 @@ class Presentation:
     """
     Base class for all presentation types
     """
-    def __init__(self, root):
-        # Directory where the media files are found
-        self.root = os.path.abspath(root)
+    def __init__(self):
         # Subprocess used to track the player
         self.proc = None
 
@@ -58,54 +57,13 @@ class Presentation:
         log.info("Player stopped")
 
 
-class SingleFileMixin:
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
-        self.fname = None
-        self.mtime = 0
-
-    def __bool__(self):
-        return self.fname is not None
-
-    @property
-    def pathname(self):
-        return os.path.join(self.root, self.fname)
-
-    def add(self, fname):
-        mtime = os.path.getmtime(os.path.join(self.root, fname))
-        if self.fname is None or mtime > self.mtime:
-            self.fname = fname
-            self.mtime = mtime
-
-
-class FileGroupMixin:
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
-        self.fnames = []
-        self.mtime = 0
-
-    def __bool__(self):
-        return bool(self.fnames)
-
-    @property
-    def pathnames(self):
-        for fn in self.fnames:
-            yield os.path.join(self.root, fn)
-
-    def add(self, fname):
-        mtime = os.path.getmtime(os.path.join(self.root, fname))
-        self.fnames.append(fname)
-        if self.mtime is None or mtime > self.mtime:
-            self.mtime = mtime
-
-
 class EmptyPresentation(Presentation):
     """
     Presentation doing nothing forever
     """
     async def run(self):
         log.info("Starting the empty presentation, doing nothing")
-        self.proc = asyncio.get_current_loop().create_future()
+        self.proc = asyncio.get_event_loop().create_future()
         await self.proc
         log.info("Empty presentation stopped")
 
@@ -116,9 +74,49 @@ class EmptyPresentation(Presentation):
         log.info("Stopped the empty presentation")
 
 
-class PDFPresentation(SingleFileMixin, Presentation):
+class FilePresentation(Presentation):
+    """
+    Base class for presentations that work on media files
+    """
+    def __init__(self, root: str, *args, **kw):
+        super().__init__(*args, **kw)
+        # Directory where the media files are found
+        self.root = root
+        self.fnames = []
+        self.most_recent_fname = None
+        self.mtime = 0
+
+    def __bool__(self):
+        return bool(self.fnames)
+
+    @property
+    def pathnames(self):
+        for fn in self.fnames:
+            yield os.path.join(self.root, fn)
+
+    @property
+    def most_recent_pathname(self):
+        return os.path.join(self.root, self.most_recent_fname)
+
+    def add(self, fname):
+        mtime = os.path.getmtime(os.path.join(self.root, fname))
+        self.fnames.append(fname)
+        if self.mtime is None or mtime > self.mtime:
+            self.mtime = mtime
+            self.most_recent_fname = fname
+
+    def move_assets_to(self, new_root):
+        for fname in self.fnames:
+            os.rename(
+                    os.path.join(self.root, fname),
+                    os.path.join(new_root, fname))
+        self.root = new_root
+
+
+class PDFPresentation(FilePresentation):
     async def run(self):
-        log.info("%s: PDF presentation", self.fname)
+        pathname = self.most_recent_pathname
+        log.info("%s: PDF presentation", pathname)
 
         confdir = os.path.expanduser("~/.config")
         os.makedirs(confdir, exist_ok=True)
@@ -146,10 +144,10 @@ class PDFPresentation(SingleFileMixin, Presentation):
         if os.path.isdir(docdata):
             shutil.rmtree(docdata)
 
-        await self.run_player(["okular", "--presentation", "--", self.pathname])
+        await self.run_player(["okular", "--presentation", "--", self.most_recent_pathname])
 
 
-class VideoPresentation(FileGroupMixin, Presentation):
+class VideoPresentation(FilePresentation):
     async def run(self):
         self.fnames.sort()
         log.info("Video presentation of %d videos", len(self.fnames))
@@ -163,7 +161,7 @@ class VideoPresentation(FileGroupMixin, Presentation):
                         "--video-on-top", "--no-video-title-show", tf.name])
 
 
-class ImagePresentation(FileGroupMixin, Presentation):
+class ImagePresentation(FilePresentation):
     async def run(self):
         self.fnames.sort()
         log.info("Image presentation of %d images", len(self.fnames))
@@ -176,12 +174,13 @@ class ImagePresentation(FileGroupMixin, Presentation):
             await self.run_player(["feh", "-f", tf.name, "-F", "-Y", "-D", "1.5"])
 
 
-class ODPPresentation(SingleFileMixin, Presentation):
+class ODPPresentation(FilePresentation):
     async def run(self):
-        log.info("%s: ODP presentation", self.fname)
+        pathname = self.most_recent_pathname
+        log.info("%s: ODP presentation", pathname)
         await self.run_player(
                 ["loimpress", "--nodefault", "--norestore", "--nologo", "--nolockcheck", "--show",
-                 os.path.join(self.root, self.pathname)])
+                 os.path.join(self.root, pathname)])
 
 
 class LogoPresentation(Presentation):
@@ -196,9 +195,10 @@ class LogoPresentation(Presentation):
 
 
 class MediaDir:
-    def __init__(self, path):
-        self.path = path
-        self.relevant_files = []
+    def __init__(self, path, backup_to: Optional["MediaDir"] = None):
+        self.path = os.path.abspath(path)
+        # MediaDir to which we backup files if requested
+        self.backup_media_dir = backup_to
         self.pdf = None
         self.videos = None
         self.images = None
@@ -209,14 +209,16 @@ class MediaDir:
     def __str__(self):
         return self.path
 
-    def scan(self):
-        self.relevant_files = None
+    def clean(self):
         self.pdf = PDFPresentation(self.path)
         self.videos = VideoPresentation(self.path)
         self.images = ImagePresentation(self.path)
         self.odp = ODPPresentation(self.path)
         self.all = [self.pdf, self.videos, self.images, self.odp]
         self.pres = None
+
+    def scan(self):
+        self.clean()
 
         if not os.path.isdir(self.path):
             return None
@@ -252,6 +254,44 @@ class MediaDir:
             return True
         else:
             return False
+
+    def move_assets_to(self, other: "MediaDir"):
+        """
+        If we contain assets, move them to other and empty this MediaDir
+        """
+        log.info("%s: moving assets to %s", self, other)
+        # Let other backup its assets if configured
+        other.backup_assets()
+
+        # Clean the other's media directory
+        if os.path.exists(other.path):
+            shutil.rmtree(other.path)
+        os.makedirs(other.path, exist_ok=True)
+
+        # Move all our assets to other
+        for p in self.all:
+            p.move_assets_to(other.path)
+        other.pdf = self.pdf
+        other.videos = self.videos
+        other.images = self.images
+        other.odp = self.odp
+        other.all = self.all
+        other.pres = self.pres
+
+        # Empty our record of media files
+        self.clean()
+
+    def backup_assets(self):
+        """
+        If we have a backup_media_dir configured and we contain assets, move
+        them to the backup_media_dir
+        """
+        if self.backup_media_dir is None:
+            return
+        if not self.scan():
+            return
+        self.move_assets_to(self.backup_media_dir)
+        self.clean()
 
 
 class ChangeMonitor:
@@ -329,6 +369,8 @@ class Player(Command):
         super().__init__(*args, **kw)
         self.settings = Settings(self.args.config)
         self.media_dir = MediaDir(self.args.media)
+        self.previous_dir = MediaDir(os.path.join(self.args.media, "previous"))
+        self.current_dir = MediaDir(os.path.join(self.args.media, "current"), backup_to=self.previous_dir)
         self.logo_dir = MediaDir(os.path.join(self.args.media, "logo"))
 
     def configure_screen(self):
@@ -365,10 +407,15 @@ class Player(Command):
     async def make_player(self):
         # Look in the media directory
         if self.media_dir.scan():
-            return self.media_dir.pres
+            self.media_dir.move_assets_to(self.current_dir)
+            return self.current_dir.pres
+
+        log.warn("%s: no media found, trying an old current dir", self.media_dir)
+        if self.current_dir.scan():
+            return self.current_dir.pres
 
         # If there is no media to play there, look into the 'logo' directory
-        log.warn("%s: no media found, trying logo", self.media_dir)
+        log.warn("%s: no media found, trying logo", self.current_dir)
         if self.logo_dir.scan():
             return self.logo_dir.pres
 
@@ -379,16 +426,8 @@ class Player(Command):
     async def main_loop(self):
         queue = asyncio.Queue()
         monitor = ChangeMonitor(queue, self.args.media)  # noqa
-        current_dir = os.path.join(self.args.media, "current")
-        previous_dir = os.path.join(self.args.media, "previous")
 
         while True:
-            # Save the last playing directory as previous_dir
-            if os.path.exists(current_dir):
-                if os.path.exists(previous_dir):
-                    shutil.rmtree(previous_dir)
-                os.rename(current_dir, previous_dir)
-
             player = await self.make_player()
             await asyncio.wait((player.run(), queue.get()), return_when=asyncio.FIRST_COMPLETED)
             if player.is_running():
