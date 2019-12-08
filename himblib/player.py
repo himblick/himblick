@@ -19,7 +19,9 @@ class Presentation:
     """
     Base class for all presentation types
     """
-    def __init__(self):
+    def __init__(self, root):
+        # Directory where the media files are found
+        self.root = os.path.abspath(root)
         # Subprocess used to track the player
         self.proc = None
 
@@ -65,8 +67,12 @@ class SingleFileMixin:
     def __bool__(self):
         return self.fname is not None
 
+    @property
+    def pathname(self):
+        return os.path.join(self.root, self.fname)
+
     def add(self, fname):
-        mtime = os.path.getmtime(fname)
+        mtime = os.path.getmtime(os.path.join(self.root, fname))
         if self.fname is None or mtime > self.mtime:
             self.fname = fname
             self.mtime = mtime
@@ -75,15 +81,20 @@ class SingleFileMixin:
 class FileGroupMixin:
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        self.files = []
+        self.fnames = []
         self.mtime = 0
 
     def __bool__(self):
-        return bool(self.files)
+        return bool(self.fnames)
+
+    @property
+    def pathnames(self):
+        for fn in self.fnames:
+            yield os.path.join(self.root, fn)
 
     def add(self, fname):
-        mtime = os.path.getmtime(fname)
-        self.files.append(fname)
+        mtime = os.path.getmtime(os.path.join(self.root, fname))
+        self.fnames.append(fname)
         if self.mtime is None or mtime > self.mtime:
             self.mtime = mtime
 
@@ -135,16 +146,16 @@ class PDFPresentation(SingleFileMixin, Presentation):
         if os.path.isdir(docdata):
             shutil.rmtree(docdata)
 
-        await self.run_player(["okular", "--presentation", "--", self.fname])
+        await self.run_player(["okular", "--presentation", "--", self.pathname])
 
 
 class VideoPresentation(FileGroupMixin, Presentation):
     async def run(self):
-        self.files.sort()
-        log.info("Video presentation of %d videos", len(self.files))
+        self.fnames.sort()
+        log.info("Video presentation of %d videos", len(self.fnames))
         with tempfile.NamedTemporaryFile("wt", suffix=".vlc") as tf:
-            for fname in self.files:
-                print(fname, file=tf)
+            for pathname in self.pathnames:
+                print(pathname, file=tf)
             tf.flush()
 
             await self.run_player(
@@ -154,11 +165,11 @@ class VideoPresentation(FileGroupMixin, Presentation):
 
 class ImagePresentation(FileGroupMixin, Presentation):
     async def run(self):
-        self.files.sort()
-        log.info("Image presentation of %d images", len(self.files))
+        self.fnames.sort()
+        log.info("Image presentation of %d images", len(self.fnames))
         with tempfile.NamedTemporaryFile("wt") as tf:
-            for fname in self.files:
-                print(fname, file=tf)
+            for pathname in self.pathnames:
+                print(pathname, file=tf)
             tf.flush()
 
             # TODO: adjust slide advance time
@@ -169,7 +180,8 @@ class ODPPresentation(SingleFileMixin, Presentation):
     async def run(self):
         log.info("%s: ODP presentation", self.fname)
         await self.run_player(
-                ["loimpress", "--nodefault", "--norestore", "--nologo", "--nolockcheck", "--show", self.fname])
+                ["loimpress", "--nodefault", "--norestore", "--nologo", "--nolockcheck", "--show",
+                 os.path.join(self.root, self.pathname)])
 
 
 class LogoPresentation(Presentation):
@@ -181,6 +193,65 @@ class LogoPresentation(Presentation):
 
     def run(self):
         self.run_player(["feh", "-F", "-Y", self.fname])
+
+
+class MediaDir:
+    def __init__(self, path):
+        self.path = path
+        self.relevant_files = []
+        self.pdf = None
+        self.videos = None
+        self.images = None
+        self.odp = None
+        self.all = []
+        self.pres = None
+
+    def __str__(self):
+        return self.path
+
+    def scan(self):
+        self.relevant_files = None
+        self.pdf = PDFPresentation(self.path)
+        self.videos = VideoPresentation(self.path)
+        self.images = ImagePresentation(self.path)
+        self.odp = ODPPresentation(self.path)
+        self.all = [self.pdf, self.videos, self.images, self.odp]
+        self.pres = None
+
+        if not os.path.isdir(self.path):
+            return None
+
+        for fn in os.listdir(self.path):
+            self.add(fn)
+
+        pres = max(self.all, key=lambda x: x.mtime)
+        if not pres:
+            return None
+        self.pres = pres
+        return self.pres
+
+    def add(self, fn):
+        base, ext = os.path.splitext(fn)
+        mimetype = mimetypes.types_map.get(ext)
+        if mimetype is None:
+            log.info("%s: mime type unknown", fn)
+            return False
+        log.info("%s: mime type %s", fn, mimetype)
+
+        if mimetype == "application/pdf":
+            self.pdf.add(fn)
+            return True
+        elif mimetype.startswith("image/"):
+            self.images.add(fn)
+            return True
+        elif mimetype.startswith("video/"):
+            self.videos.add(fn)
+            return True
+        elif mimetype == "application/vnd.oasis.opendocument.presentation":
+            self.odp.add(fn)
+            return True
+        else:
+            return False
 
 
 class ChangeMonitor:
@@ -257,41 +328,8 @@ class Player(Command):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.settings = Settings(self.args.config)
-
-    def find_presentation(self, path):
-        """
-        Find the presentation to play from a given media directory
-        """
-        if not os.path.isdir(path):
-            return None
-        pdf = PDFPresentation()
-        videos = VideoPresentation()
-        images = ImagePresentation()
-        odp = ODPPresentation()
-        all_players = [pdf, videos, images, odp]
-
-        for fn in os.listdir(path):
-            abspath = os.path.abspath(os.path.join(path, fn))
-            base, ext = os.path.splitext(fn)
-            mimetype = mimetypes.types_map.get(ext)
-            if mimetype is None:
-                log.info("%s: mime type unknown", fn)
-                continue
-            else:
-                log.info("%s: mime type %s", fn, mimetype)
-            if mimetype == "application/pdf":
-                pdf.add(abspath)
-            elif mimetype.startswith("image/"):
-                images.add(abspath)
-            elif mimetype.startswith("video/"):
-                videos.add(abspath)
-            elif mimetype == "application/vnd.oasis.opendocument.presentation":
-                odp.add(abspath)
-
-        player = max(all_players, key=lambda x: x.mtime)
-        if not player:
-            return None
-        return player
+        self.media_dir = MediaDir(self.args.media)
+        self.logo_dir = MediaDir(os.path.join(self.args.media, "logo"))
 
     def configure_screen(self):
         """
@@ -325,28 +363,32 @@ class Player(Command):
         asyncio.get_event_loop().run_until_complete(self.main_loop())
 
     async def make_player(self):
-        # current_dir = os.path.join(self.args.media, "current")
-        current_dir = self.args.media
-        logo_dir = os.path.join(self.args.media, "logo")
+        # Look in the media directory
+        if self.media_dir.scan():
+            return self.media_dir.pres
 
-        # First look into the 'current' directory
-        pres = self.find_presentation(current_dir)
-        if pres is None:
-            # If there is no media to play there, look into the 'logo' directory
-            log.warn("%s: no media found, trying logo", current_dir)
-            pres = self.find_presentation(logo_dir)
-        if pres is None:
-            # Else, do nothing
-            log.warn("%s: no media found, doing nothing", logo_dir)
-            pres = EmptyPresentation()
+        # If there is no media to play there, look into the 'logo' directory
+        log.warn("%s: no media found, trying logo", self.media_dir)
+        if self.logo_dir.scan():
+            return self.logo_dir.pres
 
-        return pres
+        # Else, do nothing
+        log.warn("%s: no media found, doing nothing", self.logo_dir)
+        return EmptyPresentation()
 
     async def main_loop(self):
         queue = asyncio.Queue()
-        monitor = ChangeMonitor(queue, self.args.media)
+        monitor = ChangeMonitor(queue, self.args.media)  # noqa
+        current_dir = os.path.join(self.args.media, "current")
+        previous_dir = os.path.join(self.args.media, "previous")
 
         while True:
+            # Save the last playing directory as previous_dir
+            if os.path.exists(current_dir):
+                if os.path.exists(previous_dir):
+                    shutil.rmtree(previous_dir)
+                os.rename(current_dir, previous_dir)
+
             player = await self.make_player()
             await asyncio.wait((player.run(), queue.get()), return_when=asyncio.FIRST_COMPLETED)
             if player.is_running():
