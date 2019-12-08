@@ -209,7 +209,7 @@ class MediaDir:
     def __str__(self):
         return self.path
 
-    def clean(self):
+    def clear(self):
         self.pdf = PDFPresentation(self.path)
         self.videos = VideoPresentation(self.path)
         self.images = ImagePresentation(self.path)
@@ -218,7 +218,7 @@ class MediaDir:
         self.pres = None
 
     def scan(self):
-        self.clean()
+        self.clear()
 
         if not os.path.isdir(self.path):
             return None
@@ -279,7 +279,7 @@ class MediaDir:
         other.pres = self.pres
 
         # Empty our record of media files
-        self.clean()
+        self.clear()
 
     def backup_assets(self):
         """
@@ -291,7 +291,7 @@ class MediaDir:
         if not self.scan():
             return
         self.move_assets_to(self.backup_media_dir)
-        self.clean()
+        self.clear()
 
 
 class ChangeMonitor:
