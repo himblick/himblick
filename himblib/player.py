@@ -6,6 +6,7 @@ from .utils import run
 import re
 import mimetypes
 import os
+import signal
 import shutil
 import shlex
 import tempfile
@@ -21,8 +22,11 @@ class Presentation:
     Base class for all presentation types
     """
     def __init__(self):
+        self.loop = asyncio.get_event_loop()
         # Subprocess used to track the player
         self.proc = None
+        # If not None, it's a future set when the player has quit
+        self.quit = None
 
     def is_running(self):
         """
@@ -44,26 +48,42 @@ class Presentation:
         #   xset -dpms
         #
         # See also: https://stackoverflow.com/questions/10885337/inhibit-screensaver-with-python
-        cmd = ["caffeinate", "--", "systemd-run", "--scope", "--slice=himblick-player", "--user"] + cmd
+        cmd = ["systemd-run", "--scope", "--slice=himblick-player", "--user", "caffeinate", "--"] + cmd
         log.info("Run %s", " ".join(shlex.quote(x) for x in cmd))
         self.proc = await asyncio.create_subprocess_exec(*cmd)
+        log.info("player %d started", self.proc.pid)
         returncode = await self.proc.wait()
+        log.info("player %d exited with return code %d", self.proc.pid, returncode)
         self.proc = None
-        log.info("player exited with return code %d", returncode)
+
+    async def run(self, queue):
+        await self._run()
+        if self.quit:
+            self.quit.set_result(True)
+        else:
+            queue.put_nowait("player_exited")
 
     async def stop(self):
-        log.info("Stopping player")
-        run(["systemctl", "--user", "stop", "himblick-player.slice"])
+        log.info("Stopping player %s", self.proc.pid if self.proc is not None else None)
+        self.quit = self.loop.create_future()
+        quit_proc = await asyncio.create_subprocess_exec("systemctl", "--user", "stop", "himblick-player.slice")
+        returncode = await quit_proc.wait()
+        if returncode != 0:
+            log.info("Stop process return code %d", returncode)
+        else:
+            log.info("Player stop requested")
+        await self.quit
         log.info("Player stopped")
+        self.quit = None
 
 
 class EmptyPresentation(Presentation):
     """
     Presentation doing nothing forever
     """
-    async def run(self):
+    async def _run(self):
         log.info("Starting the empty presentation, doing nothing")
-        self.proc = asyncio.get_event_loop().create_future()
+        self.proc = self.loop.create_future()
         await self.proc
         log.info("Empty presentation stopped")
 
@@ -114,7 +134,7 @@ class FilePresentation(Presentation):
 
 
 class PDFPresentation(FilePresentation):
-    async def run(self):
+    async def _run(self):
         pathname = self.most_recent_pathname
         log.info("%s: PDF presentation", pathname)
 
@@ -148,7 +168,7 @@ class PDFPresentation(FilePresentation):
 
 
 class VideoPresentation(FilePresentation):
-    async def run(self):
+    async def _run(self):
         self.fnames.sort()
         log.info("Video presentation of %d videos", len(self.fnames))
         with tempfile.NamedTemporaryFile("wt", suffix=".vlc") as tf:
@@ -162,7 +182,7 @@ class VideoPresentation(FilePresentation):
 
 
 class ImagePresentation(FilePresentation):
-    async def run(self):
+    async def _run(self):
         self.fnames.sort()
         log.info("Image presentation of %d images", len(self.fnames))
         with tempfile.NamedTemporaryFile("wt") as tf:
@@ -175,7 +195,7 @@ class ImagePresentation(FilePresentation):
 
 
 class ODPPresentation(FilePresentation):
-    async def run(self):
+    async def _run(self):
         pathname = self.most_recent_pathname
         log.info("%s: ODP presentation", pathname)
         await self.run_player(
@@ -236,9 +256,9 @@ class MediaDir:
         base, ext = os.path.splitext(fn)
         mimetype = mimetypes.types_map.get(ext)
         if mimetype is None:
-            log.info("%s: mime type unknown", fn)
+            log.info("%s: %s: mime type unknown", self, fn)
             return False
-        log.info("%s: mime type %s", fn, mimetype)
+        log.info("%s: %s: mime type %s", self, fn, mimetype)
 
         if mimetype == "application/pdf":
             self.pdf.add(fn)
@@ -345,7 +365,7 @@ class ChangeMonitor:
         # We can shamelessly use put_nowait, since the queue has no size bound.
         # This is handy because pyinotify does not seem to support async
         # callbacks
-        self.queue.put_nowait(None)
+        self.queue.put_nowait("rescan")
 
         # Recreate the monitor file, to be ready for the next notification
         self.create_monitor_file()
@@ -424,11 +444,27 @@ class Player(Command):
         return EmptyPresentation()
 
     async def main_loop(self):
+        loop = asyncio.get_event_loop()
         queue = asyncio.Queue()
         monitor = ChangeMonitor(queue, self.args.media)  # noqa
 
+        def do_terminate():
+            queue.put_nowait("quit")
+
+        loop.add_signal_handler(signal.SIGINT, do_terminate)
+        loop.add_signal_handler(signal.SIGTERM, do_terminate)
+
         while True:
             player = await self.make_player()
-            await asyncio.wait((player.run(), queue.get()), return_when=asyncio.FIRST_COMPLETED)
-            if player.is_running():
-                await player.stop()
+            asyncio.create_task(player.run(queue))
+            cmd = await queue.get()
+            log.info("Queue command: %s", cmd)
+            if cmd == "rescan":
+                if player.is_running():
+                    await player.stop()
+            elif cmd == "player_exited":
+                pass
+            elif cmd == "quit":
+                if player.is_running():
+                    await player.stop()
+                break
