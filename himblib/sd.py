@@ -479,7 +479,7 @@ class SD(Command):
                 return 1
             self.umount(dev)
             with self.pause_automounting(dev):
-                self.write_image(dev, sync=False)
+                self.write_image(dev)
                 self.partition(dev)
                 self.setup_boot()
                 self.setup_rootfs()
