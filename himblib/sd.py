@@ -350,9 +350,15 @@ class SD(Command):
     def setup_rootfs(self):
         with self.mount_rootfs() as chroot:
             chroot.cleanup_raspbian_rootfs()
-            chroot.setup_readonly_root()
 
             self.restore_apt_cache(chroot)
+
+            # Update apt cache
+            apt_cache = chroot.abspath("/var/cache/apt/pkgcache.bin")
+            if not os.path.exists(apt_cache) or time.time() - os.path.getmtime(apt_cache) > 86400:
+                chroot.run(["apt", "update"], check=True)
+
+            chroot.setup_readonly_root()
 
             # Generate SSH host keys
             ssh_dir = chroot.abspath("/etc/ssh")
@@ -366,11 +372,6 @@ class SD(Command):
                 run(["ssh-keygen", "-A", "-f", chroot.root])
             else:
                 run(["tar", "-C", ssh_dir, "-axf", self.settings.SSH_HOST_KEYS])
-
-            # Update apt cache
-            apt_cache = chroot.abspath("/var/cache/apt/pkgcache.bin")
-            if not os.path.exists(apt_cache) or time.time() - os.path.getmtime(apt_cache) > 86400:
-                chroot.run(["apt", "update"], check=True)
 
             # Install our own package
             if not os.path.exists(self.settings.HIMBLICK_PACKAGE):
