@@ -138,11 +138,33 @@ class PDFPresentation(FilePresentation):
         pathname = self.most_recent_pathname
         log.info("%s: PDF presentation", pathname)
 
+        confdir = os.path.expanduser("~/.config")
+        os.makedirs(confdir, exist_ok=True)
+
         # TODO: configure slide advance time
-        await self.run_player([
-            "impressive", "--fake-fullscreen", "--nologo", "--nooverview",
-            "-t", "WipeLeft", "--auto", "1", "--wrap", "--",
-            self.most_recent_pathname])
+
+        # Configure okular
+        with open(os.path.expanduser(os.path.join(confdir, "okularpartrc")), "wt") as fd:
+            print("[Core Presentation]", file=fd)
+            print("SlidesAdvance=true", file=fd)
+            print("SlidesAdvanceTime=2", file=fd)
+            print("SlidesLoop=true", file=fd)
+            print("[Dlg Presentation]", file=fd)
+            print("SlidesShowProgress=false", file=fd)
+            # print("SlidesTransition=GlitterRight", file=fd)
+
+        # Silence a too-helpful first-time-run informational message
+        with open(os.path.expanduser(os.path.join(confdir, "okular.kmessagebox")), "wt") as fd:
+            print("[General]", file=fd)
+            print("presentationInfo=4", file=fd)
+
+        # Remove state of previous okular runs, so presentations begin at the
+        # beginning
+        docdata = os.path.expanduser("~/.local/share/okular/docdata/")
+        if os.path.isdir(docdata):
+            shutil.rmtree(docdata)
+
+        await self.run_player(["okular", "--presentation", "--", self.most_recent_pathname])
 
 
 class VideoPresentation(FilePresentation):

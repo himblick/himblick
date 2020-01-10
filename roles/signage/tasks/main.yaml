@@ -51,7 +51,7 @@
        - python3-pyinotify
        - caffeine
        - vlc
-       - impressive
+       - okular
        - feh
        - libreoffice-impress
        - libreoffice-avmedia-backend-vlc
