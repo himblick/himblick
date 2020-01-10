@@ -50,7 +50,7 @@
        - x11-xserver-utils  # for xrandr
        - caffeine
        - vlc
-       - okular
+       - impressive
        - feh
        - libreoffice-impress
        - libreoffice-avmedia-backend-vlc
