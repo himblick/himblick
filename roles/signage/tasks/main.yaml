@@ -48,6 +48,7 @@
        - lightdm
       # himblick player dependencies
        - x11-xserver-utils  # for xrandr
+       - python3-pyinotify
        - caffeine
        - vlc
        - impressive
