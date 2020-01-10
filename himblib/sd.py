@@ -127,7 +127,7 @@ class SD(Command):
                 continue
             run(["umount", mp])
 
-    def write_image(self, dev: Dict[str, Any]):
+    def write_image(self, dev: Dict[str, Any], sync=True):
         """
         Write the base image to the SD card
         """
@@ -145,8 +145,9 @@ class SD(Command):
                     total_read += bytes_read
                     pbar.update(total_read)
                     fdout.write(copy_buffer[:bytes_read])
-                    fdout.flush()
-                    os.fdatasync(fdout.fileno())
+                    if sync:
+                        fdout.flush()
+                        os.fdatasync(fdout.fileno())
                 pbar.finish()
 
     def partition(self, dev: Dict[str, Any]):
@@ -479,7 +480,7 @@ class SD(Command):
                 return 1
             self.umount(dev)
             with self.pause_automounting(dev):
-                self.write_image(dev)
+                self.write_image(dev, sync=False)
                 self.partition(dev)
                 self.setup_boot()
                 self.setup_rootfs()
