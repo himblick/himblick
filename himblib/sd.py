@@ -39,8 +39,6 @@ class SD(Command):
         parser.add_argument("--config", "-C", action="store", metavar="file.conf",
                             default="himblick.conf",
                             help="configuration file to load (default: himblick.conf)")
-        parser.add_argument("--hostname", action="store", metavar="hostname",
-                            help="hostname to use")
         parser.add_argument("--force", "-f", action="store_true",
                             help="do not ask for confirmation before destructive operations")
         parser.add_argument("--shell", action="store_true",
