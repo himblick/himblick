@@ -1,0 +1,5 @@
+#!/bin/sh
+set -ue
+NAME=$(date +%Y%m%d)
+aptly --config=.aptly.conf publish snapshot $NAME
+echo "Published snapshot $NAME"

@@ -356,6 +356,8 @@ class SD(Command):
             if not os.path.exists(apt_cache) or time.time() - os.path.getmtime(apt_cache) > 86400:
                 chroot.run(["apt", "update"], check=True)
 
+            chroot.run(["apt", "-y", "dist-upgrade"], check=True)
+
             chroot.setup_readonly_root()
 
             # Generate SSH host keys
