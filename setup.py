@@ -16,6 +16,6 @@ setup(
     author="Enrico Zini <enrico@enricozini.org>, Ulrike Uhlig <u@451f.org>",
     url="https://github.com/himblick/himblick",
     license="http://www.gnu.org/licenses/gpl-3.0.html",
-    packages=["himblib"],
+    packages=["himblib", "himblib.player"],
     scripts=['himblick'],
 )
