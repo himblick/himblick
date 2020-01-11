@@ -49,6 +49,7 @@
       # himblick player dependencies
        - x11-xserver-utils  # for xrandr
        - python3-pyinotify
+       - python3-tornado
        - caffeine
        - vlc
        - okular

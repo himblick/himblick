@@ -9,7 +9,7 @@ setup(
     # http://setuptools.readthedocs.io/en/latest/setuptools.html#declaring-extras-optional-features-with-their-own-dependencies
     extras_require={
         'setup': ['pyparted', "progressbar", "pyyaml"],
-        'player': ['pyinotify'],
+        'player': ['pyinotify', 'tornado'],
     },
     version="1.0",
     description="Himblick setup and maintenance tool",
