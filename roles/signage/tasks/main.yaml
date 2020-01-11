@@ -50,6 +50,9 @@
        - x11-xserver-utils  # for xrandr
        - python3-pyinotify
        - python3-tornado
+       - libjs-jquery
+       - libjs-bootstrap4
+       - fonts-fork-awesome
        - caffeine
        - vlc
        - okular

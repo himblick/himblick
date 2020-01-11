@@ -17,5 +17,6 @@ setup(
     url="https://github.com/himblick/himblick",
     license="http://www.gnu.org/licenses/gpl-3.0.html",
     packages=["himblib", "himblib.player"],
+    include_package_data=True,
     scripts=['himblick'],
 )

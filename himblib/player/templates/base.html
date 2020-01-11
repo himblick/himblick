@@ -1,0 +1,48 @@
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <script src="{{static_url('jquery/jquery.min.js')}}"></script>
+
+    <script src="{{static_url('popper.js/umd/popper.min.js')}}"></script>
+    <link rel="stylesheet" href="{{static_url('bootstrap4/css/bootstrap.min.css')}}">
+    <script src="{{static_url('bootstrap4/js/bootstrap.min.js')}}"></script>
+
+    <link rel="stylesheet" href="{{static_url('fork-awesome/css/fork-awesome.css')}}">
+
+    <script type="text/javascript">
+    (function() {
+    "use strict";
+
+    window.himblick = {};
+
+    window.himblick.config = {
+        socket: "{{handler.ws_url}}",
+        xsrf_token: "{{handler.xsrf_token}}",
+    }
+
+    })();
+    </script>
+    <script src="{{static_url('himblick/himblick.js')}}"></script>
+
+    {% block head %}
+    {% end %}
+
+    <title>{{title}}</title>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+      <a class="navbar-brand" href="#">Himblick</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNavDropdown">
+        {% block nav %}
+        {% end %}
+      </div>
+    </nav>
+
+    {% block body %}
+    {% end %}
+  </body>
+</html>

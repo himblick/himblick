@@ -5,6 +5,7 @@ from ..utils import run
 from . import presentation
 from .changemonitor import ChangeMonitor
 from .mediadir import MediaDir
+from .server import WebUI
 import re
 import mimetypes
 import os
@@ -38,6 +39,7 @@ class Player(Command):
         self.current_dir = MediaDir(
                 self.player_settings, os.path.join(self.args.media, "current"), backup_to=self.previous_dir)
         self.logo_dir = MediaDir(self.player_settings, os.path.join(self.args.media, "logo"))
+        self.web_ui = WebUI(self)
 
     def configure_screen(self):
         """
@@ -67,6 +69,8 @@ class Player(Command):
         mimetypes.init()
 
         self.configure_screen()
+
+        self.web_ui.start_server()
 
         asyncio.get_event_loop().run_until_complete(self.main_loop())
 
@@ -106,6 +110,7 @@ class Player(Command):
         while True:
             player = await self.make_player()
             asyncio.create_task(player.run(queue))
+            self.web_ui.trigger_reload()
             cmd = await queue.get()
             log.info("Queue command: %s", cmd)
             if cmd == "rescan":
