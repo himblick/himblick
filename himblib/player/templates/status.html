@@ -2,9 +2,21 @@
 
 {% block body %}
 
-Status page.
+<h1>{{title}}</h1>
 
-{{now}}
+<p>Status updated at {% raw format_timestamp(now) %}.</p>
+
+<p>Presentation: <strong>{{presentation.__class__.__name__}}</strong> started at {% raw format_timestamp(presentation.started) %}.</p>
+
+{% if presentation.get_files() %}
+<p>Files:
+<ul>
+  {% for name in presentation.get_files() %}
+  <li>{{name}}</li>
+  {% end %}
+</ul>
+</p>
+{% end %}
 
 </div>
 {% end %}

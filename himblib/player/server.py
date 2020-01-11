@@ -4,12 +4,14 @@ import logging
 import json
 import os
 import time
+import datetime
 import tornado.web
 from tornado.web import url
 import tornado.httpserver
 import tornado.netutil
 import tornado.websocket
 import tornado.ioloop
+from tornado.escape import xhtml_escape
 from .static import StaticFileHandler
 
 
@@ -33,6 +35,12 @@ class Socket(tornado.websocket.WebSocketHandler):
         self.application.remove_socket(self)
 
 
+def format_timestamp(ts):
+    dt = datetime.datetime.fromtimestamp(ts)
+    text = xhtml_escape(dt.strftime("%Y-%m-%d %H:%M:%S"))
+    return f"<span data-timestamp='{ts}'>{text}</span>"
+
+
 class StatusPage(tornado.web.RequestHandler):
     def get(self):
         _ = self.locale.translate
@@ -44,7 +52,11 @@ class StatusPage(tornado.web.RequestHandler):
             self.ws_url = "wss://" + self.request.host + \
                           self.application.reverse_url("socket")
 
-        self.render("status.html", title=_("Himblick status"), now=time.time())
+        self.render("status.html",
+                    title=_("Himblick status"),
+                    now=time.time(),
+                    presentation=self.application.player.current_presentation,
+                    format_timestamp=format_timestamp)
 
 
 class WebUI(tornado.web.Application):

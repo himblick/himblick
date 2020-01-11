@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
+import time
 import asyncio
 import shlex
 import os
@@ -24,6 +25,8 @@ class Presentation:
         self.proc = None
         # If not None, it's a future set when the player has quit
         self.quit = None
+        # Time when the presentation started
+        self.started = time.time()
 
     def is_running(self):
         """
@@ -78,6 +81,9 @@ class EmptyPresentation(Presentation):
     """
     Presentation doing nothing forever
     """
+    def get_files(self):
+        return []
+
     async def _run(self):
         log.info("Starting the empty presentation, doing nothing")
         self.proc = self.loop.create_future()
@@ -105,6 +111,9 @@ class FilePresentation(Presentation):
 
     def __bool__(self):
         return bool(self.fnames)
+
+    def get_files(self):
+        return self.fnames
 
     @property
     def pathnames(self):

@@ -40,6 +40,7 @@ class Player(Command):
                 self.player_settings, os.path.join(self.args.media, "current"), backup_to=self.previous_dir)
         self.logo_dir = MediaDir(self.player_settings, os.path.join(self.args.media, "logo"))
         self.web_ui = WebUI(self)
+        self.current_presentation = None
 
     def configure_screen(self):
         """
@@ -74,7 +75,7 @@ class Player(Command):
 
         asyncio.get_event_loop().run_until_complete(self.main_loop())
 
-    async def make_player(self):
+    async def make_presentation(self):
         # Reload configuration
         self.player_settings.reload()
 
@@ -108,17 +109,18 @@ class Player(Command):
         loop.add_signal_handler(signal.SIGTERM, do_terminate)
 
         while True:
-            player = await self.make_player()
-            asyncio.create_task(player.run(queue))
+            self.current_presentation = await self.make_presentation()
+            asyncio.create_task(self.current_presentation.run(queue))
             self.web_ui.trigger_reload()
             cmd = await queue.get()
             log.info("Queue command: %s", cmd)
             if cmd == "rescan":
-                if player.is_running():
-                    await player.stop()
+                if self.current_presentation.is_running():
+                    await self.current_presentation.stop()
             elif cmd == "player_exited":
                 pass
             elif cmd == "quit":
-                if player.is_running():
-                    await player.stop()
+                if self.current_presentation.is_running():
+                    await self.current_presentation.stop()
                 break
+            self.current_presentation = None
