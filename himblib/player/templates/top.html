@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block body %}
+
+<h1>{{title}}</h1>
+
+<p>Status updated at {% raw format_timestamp(now) %}.</p>
+
+<p>Presentation: <strong>{{presentation.__class__.__name__}}</strong> started at {% raw format_timestamp(presentation.started) %}.</p>
+
+<pre>{{top}}</pre>
+
+{% end %}
+

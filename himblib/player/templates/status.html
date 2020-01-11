@@ -18,6 +18,18 @@
 </p>
 {% end %}
 
+<p>Uptime:
+<pre>{{uptime}}</pre>
+</p>
+
+<p>Free:
+<pre>{{free}}</pre>
+</p>
+
+<p>Player status:
+<pre>{{systemctl_status}}</pre>
+</p>
+
 <p>Log:</p>
 <ul>
   {% for line in reversed(handler.application.logbuffer.queue) %}

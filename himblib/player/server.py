@@ -5,6 +5,7 @@ import json
 import os
 import time
 import datetime
+import subprocess
 from collections import deque
 import tornado.web
 from tornado.web import url
@@ -42,6 +43,11 @@ def format_timestamp(ts):
     return f"<span data-timestamp='{ts}'>{text}</span>"
 
 
+def runcmd(*cmd):
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    return res.stdout
+
+
 class StatusPage(tornado.web.RequestHandler):
     def get(self):
         _ = self.locale.translate
@@ -57,7 +63,48 @@ class StatusPage(tornado.web.RequestHandler):
                     title=_("Himblick status"),
                     now=time.time(),
                     presentation=self.application.player.current_presentation,
-                    format_timestamp=format_timestamp)
+                    format_timestamp=format_timestamp,
+                    uptime=runcmd("uptime"),
+                    free=runcmd("free", "-h"),
+                    systemctl_status=runcmd("systemctl", "--user", "status", "himblick-player.slice"))
+
+
+class TopCpuPage(tornado.web.RequestHandler):
+    def get(self):
+        _ = self.locale.translate
+
+        if self.request.protocol == "http":
+            self.ws_url = "ws://" + self.request.host + \
+                          self.application.reverse_url("socket")
+        else:
+            self.ws_url = "wss://" + self.request.host + \
+                          self.application.reverse_url("socket")
+
+        self.render("top.html",
+                    title=_("Himblick status - CPU top"),
+                    now=time.time(),
+                    presentation=self.application.player.current_presentation,
+                    format_timestamp=format_timestamp,
+                    top=runcmd("top", "-b", "-n", "1", "-o", "%CPU", "-w", "512"))
+
+
+class TopMemPage(tornado.web.RequestHandler):
+    def get(self):
+        _ = self.locale.translate
+
+        if self.request.protocol == "http":
+            self.ws_url = "ws://" + self.request.host + \
+                          self.application.reverse_url("socket")
+        else:
+            self.ws_url = "wss://" + self.request.host + \
+                          self.application.reverse_url("socket")
+
+        self.render("top.html",
+                    title=_("Himblick status - MEM top"),
+                    now=time.time(),
+                    presentation=self.application.player.current_presentation,
+                    format_timestamp=format_timestamp,
+                    top=runcmd("top", "-b", "-n", "1", "-o", "%MEM", "-w", "512"))
 
 
 class WebLoggingHandler(logging.Handler):
@@ -77,6 +124,8 @@ class WebUI(tornado.web.Application):
         urls = [
             url(r"/_server/websocket", Socket, name="socket"),
             url(r"^/$", StatusPage, name="status"),
+            url(r"^/status/top-cpu$", TopCpuPage, name="status_top_cpu"),
+            url(r"^/status/top-mem$", TopMemPage, name="status_top_mem"),
         ]
 
         settings = {
