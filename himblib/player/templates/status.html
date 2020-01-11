@@ -18,5 +18,12 @@
 </p>
 {% end %}
 
+<p>Log:</p>
+<ul>
+  {% for line in reversed(handler.application.logbuffer.queue) %}
+  <li>{{line}}</li>
+  {% end %}
+</ul>
+
 </div>
 {% end %}

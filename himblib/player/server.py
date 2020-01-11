@@ -5,6 +5,7 @@ import json
 import os
 import time
 import datetime
+from collections import deque
 import tornado.web
 from tornado.web import url
 import tornado.httpserver
@@ -59,6 +60,18 @@ class StatusPage(tornado.web.RequestHandler):
                     format_timestamp=format_timestamp)
 
 
+class WebLoggingHandler(logging.Handler):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.queue = deque(maxlen=100)
+        # TODO: add a formatter and a filter
+
+    def emit(self, record):
+        formatted = self.format(record)
+        self.queue.append(formatted)
+        # TODO: notify a log update via websocket
+
+
 class WebUI(tornado.web.Application):
     def __init__(self, player: Player):
         urls = [
@@ -81,6 +94,9 @@ class WebUI(tornado.web.Application):
 
         self.player: Player = player
         self.sockets: Set[Socket] = set()
+
+        self.logbuffer = WebLoggingHandler(level=logging.INFO)
+        logging.getLogger().addHandler(self.logbuffer)
 
     def add_socket(self, handler):
         self.sockets.add(handler)
