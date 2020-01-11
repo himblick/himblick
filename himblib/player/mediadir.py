@@ -1,16 +1,20 @@
 from __future__ import annotations
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 import os
 import mimetypes
 import shutil
 import logging
 from . import presentation
 
+if TYPE_CHECKING:
+    from ..settings import PlayerSettings
+
 log = logging.getLogger(__name__)
 
 
 class MediaDir:
-    def __init__(self, path, backup_to: Optional["MediaDir"] = None):
+    def __init__(self, settings: PlayerSettings, path, backup_to: Optional["MediaDir"] = None):
+        self.settings = settings
         self.path = os.path.abspath(path)
         # MediaDir to which we backup files if requested
         self.backup_media_dir = backup_to
@@ -25,10 +29,10 @@ class MediaDir:
         return self.path
 
     def clear(self):
-        self.pdf = presentation.PDFPresentation(self.path)
-        self.videos = presentation.VideoPresentation(self.path)
-        self.images = presentation.ImagePresentation(self.path)
-        self.odp = presentation.ODPPresentation(self.path)
+        self.pdf = presentation.PDFPresentation(self.settings, root=self.path)
+        self.videos = presentation.VideoPresentation(self.settings, root=self.path)
+        self.images = presentation.ImagePresentation(self.settings, root=self.path)
+        self.odp = presentation.ODPPresentation(self.settings, root=self.path)
         self.all = [self.pdf, self.videos, self.images, self.odp]
         self.pres = None
 

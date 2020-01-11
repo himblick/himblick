@@ -1,10 +1,14 @@
 from __future__ import annotations
+from typing import TYPE_CHECKING
 import asyncio
 import shlex
 import os
 import shutil
 import tempfile
 import logging
+
+if TYPE_CHECKING:
+    from ..settings import PlayerSettings
 
 log = logging.getLogger(__name__)
 
@@ -13,7 +17,8 @@ class Presentation:
     """
     Base class for all presentation types
     """
-    def __init__(self):
+    def __init__(self, settings: PlayerSettings):
+        self.settings = settings
         self.loop = asyncio.get_event_loop()
         # Subprocess used to track the player
         self.proc = None
@@ -90,7 +95,7 @@ class FilePresentation(Presentation):
     """
     Base class for presentations that work on media files
     """
-    def __init__(self, root: str, *args, **kw):
+    def __init__(self, *args, root: str, **kw):
         super().__init__(*args, **kw)
         # Directory where the media files are found
         self.root = root
@@ -133,13 +138,11 @@ class PDFPresentation(FilePresentation):
         confdir = os.path.expanduser("~/.config")
         os.makedirs(confdir, exist_ok=True)
 
-        # TODO: configure slide advance time
-
         # Configure okular
         with open(os.path.expanduser(os.path.join(confdir, "okularpartrc")), "wt") as fd:
             print("[Core Presentation]", file=fd)
             print("SlidesAdvance=true", file=fd)
-            print("SlidesAdvanceTime=2", file=fd)
+            print(f"SlidesAdvanceTime={self.settings.pdf_transition_time}", file=fd)
             print("SlidesLoop=true", file=fd)
             print("[Dlg Presentation]", file=fd)
             print("SlidesShowProgress=false", file=fd)
@@ -182,8 +185,7 @@ class ImagePresentation(FilePresentation):
                 print(pathname, file=tf)
             tf.flush()
 
-            # TODO: adjust slide advance time
-            await self.run_player(["feh", "-f", tf.name, "-F", "-Y", "-D", "1.5"])
+            await self.run_player(["feh", "-f", tf.name, "-F", "-Y", "-D", str(self.settings.photo_transition_time)])
 
 
 class ODPPresentation(FilePresentation):
@@ -193,14 +195,3 @@ class ODPPresentation(FilePresentation):
         await self.run_player(
                 ["loimpress", "--nodefault", "--norestore", "--nologo", "--nolockcheck", "--show",
                  os.path.join(self.root, pathname)])
-
-
-class LogoPresentation(Presentation):
-    """
-    Presentation shown when there are no media to show
-    """
-    def __init__(self, fname):
-        self.fname = fname
-
-    def run(self):
-        self.run_player(["feh", "-F", "-Y", self.fname])

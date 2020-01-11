@@ -90,3 +90,34 @@ class Settings:
     @property
     def CACHE_DIR(self):
         return self.provision("cache dir")
+
+
+class PlayerSettings:
+    def __init__(self, pathname):
+        self.cfg = configparser.ConfigParser()
+        # Default settings
+        self.cfg.read_dict({
+            "player": {
+                # Transition time for photo slideshows
+                "photo transition time": "5",
+
+                # Transition time for PDF presentations
+                "pdf transition time": "5",
+            }
+        })
+        log.info("Reading configuration from %s", pathname)
+        self.cfg.read([pathname])
+
+    def general(self, key: str) -> str:
+        return self.cfg["general"].get(key, "")
+
+    def provision(self, key: str) -> str:
+        return self.cfg["provision"].get(key, "")
+
+    @property
+    def photo_transition_time(self):
+        return int(self.cfg["player"].get("photo transition_time", "5"))
+
+    @property
+    def pdf_transition_time(self):
+        return int(self.cfg["player"].get("pdf transition_time", "5"))

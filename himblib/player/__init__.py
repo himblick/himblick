@@ -1,8 +1,9 @@
 from __future__ import annotations
 from ..cmdline import Command
-from ..settings import Settings
+from ..settings import Settings, PlayerSettings
 from ..utils import run
 from . import presentation
+from .changemonitor import ChangeMonitor
 from .mediadir import MediaDir
 import re
 import mimetypes
@@ -31,10 +32,12 @@ class Player(Command):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.settings = Settings(self.args.config)
-        self.media_dir = MediaDir(self.args.media)
-        self.previous_dir = MediaDir(os.path.join(self.args.media, "previous"))
-        self.current_dir = MediaDir(os.path.join(self.args.media, "current"), backup_to=self.previous_dir)
-        self.logo_dir = MediaDir(os.path.join(self.args.media, "logo"))
+        self.player_settings = PlayerSettings(os.path.join(self.args.media, "himblick.conf"))
+        self.media_dir = MediaDir(self.player_settings, self.args.media)
+        self.previous_dir = MediaDir(self.player_settings, os.path.join(self.args.media, "previous"))
+        self.current_dir = MediaDir(
+                self.player_settings, os.path.join(self.args.media, "current"), backup_to=self.previous_dir)
+        self.logo_dir = MediaDir(self.player_settings, os.path.join(self.args.media, "logo"))
 
     def configure_screen(self):
         """
