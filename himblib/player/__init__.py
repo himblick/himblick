@@ -71,6 +71,9 @@ class Player(Command):
         asyncio.get_event_loop().run_until_complete(self.main_loop())
 
     async def make_player(self):
+        # Reload configuration
+        self.player_settings.reload()
+
         # Look in the media directory
         if self.media_dir.scan():
             self.media_dir.move_assets_to(self.current_dir)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Generator, Tuple, Dict
+import os
 import logging
 import configparser
 
@@ -94,6 +95,9 @@ class Settings:
 
 class PlayerSettings:
     def __init__(self, pathname):
+        self.pathname = pathname
+
+    def reload(self):
         self.cfg = configparser.ConfigParser()
         # Default settings
         self.cfg.read_dict({
@@ -105,19 +109,18 @@ class PlayerSettings:
                 "pdf transition time": "5",
             }
         })
-        log.info("Reading configuration from %s", pathname)
-        self.cfg.read([pathname])
+        log.info("Reading configuration from %s", self.pathname)
+        self.cfg.read([self.pathname])
 
-    def general(self, key: str) -> str:
-        return self.cfg["general"].get(key, "")
-
-    def provision(self, key: str) -> str:
-        return self.cfg["provision"].get(key, "")
+        # Create player config file if missing
+        if not os.path.exists(self.pathname):
+            with open(self.pathname, "wt") as out:
+                self.cfg.write(out)
 
     @property
     def photo_transition_time(self):
-        return int(self.cfg["player"].get("photo transition_time", "5"))
+        return int(self.cfg["player"].get("photo transition time", "5"))
 
     @property
     def pdf_transition_time(self):
-        return int(self.cfg["player"].get("pdf transition_time", "5"))
+        return int(self.cfg["player"].get("pdf transition time", "5"))
