@@ -1,6 +1,7 @@
 #!/bin/sh
 set -ue
 aptly --config=.aptly.conf --keyring=`pwd`/trusted.gpg mirror create raspbian http://raspbian.raspberrypi.org/raspbian/ buster main contrib non-free rpi
+aptly --config=.aptly.conf --keyring=`pwd`/trusted.gpg mirror create debian http://archive.raspberrypi.org/debian/ buster main
 aptly --config=.aptly.conf repo create himblick
 # aptly --config=.aptly.conf repo add himblick fixed-vlc/*
 # aptly --config=.aptly.conf repo add himblick ../../himblick_1.0-1_all.deb

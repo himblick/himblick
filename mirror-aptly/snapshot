@@ -2,6 +2,7 @@
 set -ue
 NAME=$(date +%Y%m%d)
 aptly --config=.aptly.conf snapshot create raspbian-$NAME from mirror raspbian
+aptly --config=.aptly.conf snapshot create debian-$NAME from mirror debian
 aptly --config=.aptly.conf snapshot create himblick-$NAME from repo himblick
-aptly --config=.aptly.conf snapshot merge $NAME raspbian-$NAME himblick-$NAME
+aptly --config=.aptly.conf snapshot merge $NAME debian-$NAME raspbian-$NAME himblick-$NAME
 echo "Created snapshot $NAME"
