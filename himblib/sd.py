@@ -315,6 +315,7 @@ class SD(Command):
             if os.path.exists(dest) and os.path.getsize(dest) == os.path.getsize(src):
                 continue
             shutil.copy(src, dest)
+            os.unlink(src)
 
     def restore_apt_cache(self, chroot: Chroot):
         """
