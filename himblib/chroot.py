@@ -19,6 +19,22 @@ class Chroot:
     def __init__(self, root):
         self.root = root
 
+    @classmethod
+    def for_part(cls, part):
+        """
+        Instantiate a Chroot subclass for the given partition.
+
+        The partition is assumed mounted
+        """
+        if part["label"] == "boot":
+            return ConfigChroot(part["mountpoint"])
+        elif part["label"] == "rootfs":
+            return RootfsChroot(part["mountpoint"])
+        elif part["label"] == "media":
+            return MediaChroot(part["mountpoint"])
+        else:
+            raise RuntimeError(f"Unrecognised partition label: '{part['label']}'")
+
     def abspath(self, relpath: str, *args, create=False) -> str:
         """
         Get the out-of-chroot absolute path of ``relpath``.
@@ -62,25 +78,6 @@ class Chroot:
         if os.path.lexists(dest):
             os.unlink(dest)
         os.symlink(target, dest)
-
-    @contextmanager
-    def edit_kernel_commandline(self, fname="cmdline.txt"):
-        """
-        Manipulate the kernel command line as an editable list.
-
-        If the list gets changed, it is written back.
-        """
-        dest = self.abspath(fname)
-        with open(dest, "rt") as fd:
-            line = fd.read().strip()
-
-        line_split = line.split()
-        yield line_split
-
-        new_line = " ".join(line_split)
-        if new_line != line:
-            with open(dest, "wt") as fd:
-                print(new_line, file=fd)
 
     @contextmanager
     def edit_text_file(self, fname: str):
@@ -170,6 +167,54 @@ class Chroot:
             shutil.copytree(src, dest)
         else:
             shutil.copy(src, dest)
+
+    @contextmanager
+    def edit_kernel_commandline(self, fname="cmdline.txt"):
+        """
+        Manipulate the kernel command line as an editable list.
+
+        If the list gets changed, it is written back.
+        """
+        dest = self.abspath(fname)
+        with open(dest, "rt") as fd:
+            line = fd.read().strip()
+
+        line_split = line.split()
+        yield line_split
+
+        new_line = " ".join(line_split)
+        if new_line != line:
+            with open(dest, "wt") as fd:
+                print(new_line, file=fd)
+
+
+class ConfigChroot(Chroot):
+    def cleanup_raspbian_boot(self):
+        """
+        Remove the interactive raspbian customizations from the boot partition
+        """
+        # Remove ' init=/usr/lib/raspi-config/init_resize.sh' from cmdline.txt
+        # This is present by default in raspbian to perform partition
+        # resize on the first boot, and it removes itself and reboots after
+        # running. We do not need it, as we do our own partition resizing.
+        # Also, we can't keep it, since we remove raspi-config and the
+        # init_resize.sh script would break without it
+        with self.edit_kernel_commandline() as parts:
+            try:
+                parts.remove("init=/usr/lib/raspi-config/init_resize.sh")
+            except ValueError:
+                pass
+
+
+class RootfsChroot(Chroot):
+    #    @contextmanager
+    #    def build_mirror(self, part):
+    #        if part["label"] != rootfs:
+    #            yield
+    #        else:
+    #            path["mountpoint"]
+    #            print(repr(part))
+    #            yield
 
     @contextmanager
     def working_resolvconf(self, relpath: str):
@@ -269,22 +314,6 @@ class Chroot:
             return
 
         self.run(cmd)
-
-    def cleanup_raspbian_boot(self):
-        """
-        Remove the interactive raspbian customizations from the boot partition
-        """
-        # Remove ' init=/usr/lib/raspi-config/init_resize.sh' from cmdline.txt
-        # This is present by default in raspbian to perform partition
-        # resize on the first boot, and it removes itself and reboots after
-        # running. We do not need it, as we do our own partition resizing.
-        # Also, we can't keep it, since we remove raspi-config and the
-        # init_resize.sh script would break without it
-        with self.edit_kernel_commandline() as parts:
-            try:
-                parts.remove("init=/usr/lib/raspi-config/init_resize.sh")
-            except ValueError:
-                pass
 
     def cleanup_raspbian_rootfs(self):
         """
@@ -422,3 +451,7 @@ RouteMetric=10
 
         # Run ansible
         self.run(["/srv/himblick/ansible/rootfs.sh"], check=True)
+
+
+class MediaChroot(Chroot):
+    pass

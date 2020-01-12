@@ -276,7 +276,7 @@ class SD(Command):
             run(["udisksctl", "mount", "-b", part["path"]], stdout=subprocess.DEVNULL)
             part = self.locate_partition(label)
 
-            yield Chroot(part["mountpoint"])
+            yield Chroot.for_part(part)
 
             run(["udisksctl", "unmount", "-b", part["path"]], stdout=subprocess.DEVNULL)
 
