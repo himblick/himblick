@@ -3,6 +3,7 @@ set -u
 NAME=${1:-$(date +%Y%m%d)}
 aptly --config=.aptly.conf publish drop buster
 aptly --config=.aptly.conf snapshot drop $NAME
+aptly --config=.aptly.conf snapshot drop base-$NAME
 aptly --config=.aptly.conf snapshot drop raspbian-$NAME
 aptly --config=.aptly.conf snapshot drop debian-$NAME
 aptly --config=.aptly.conf snapshot drop himblick-$NAME
