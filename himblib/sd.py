@@ -427,6 +427,18 @@ class SD(Command):
 
             self.save_apt_cache(chroot)
 
+    def setup_media(self):
+        with self.mounted("media") as chroot:
+            # Regenerate the logo directory
+            logo_dir = chroot.abspath("/logo")
+            if os.path.isdir(logo_dir):
+                shutil.rmtree(logo_dir)
+
+            logo = self.settings.provision("media logo")
+            if logo:
+                os.makedirs(chroot.abspath("/logo"), exist_ok=True)
+                shutil.copy(logo, chroot.abspath("/logo"))
+
     def confirm_operation(self, dev, operation):
         """
         Ask for confirmation before performing a destructive operation on a
@@ -477,6 +489,8 @@ class SD(Command):
                     self.setup_boot()
                 if self.args.setup in ("rootfs", "all"):
                     self.setup_rootfs()
+                if self.args.setup in ("media", "all"):
+                    self.setup_media()
         elif self.args.provision:
             dev = self.locate()
             if not self.confirm_operation(dev, "Provision"):
@@ -487,5 +501,6 @@ class SD(Command):
                 self.partition(dev)
                 self.setup_boot()
                 self.setup_rootfs()
+                self.setup_media()
         else:
             raise Fail("No command given: try --help")
