@@ -95,7 +95,7 @@ class Player(Command):
 
         # Else, do nothing
         log.warn("%s: no media found, doing nothing", self.logo_dir)
-        return presentation.EmptyPresentation()
+        return presentation.EmptyPresentation(self.player_settings)
 
     async def main_loop(self):
         loop = asyncio.get_event_loop()
