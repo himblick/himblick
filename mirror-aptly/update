@@ -1,7 +1,7 @@
 #!/bin/sh
 set -uex
 
-FILTER="Priority (required)|ansible|dracut|cpufrequtils|libnss-systemd|libpam-cap|xserver-xorg|openbox|xterm|fonts-droid-fallback|fonts-liberation2|xfonts-base|lightdm|x11-xserver-utils|python3-pyinotify|python3-tornado|libjs-jquery|libjs-bootstrap4|fonts-fork-awesome|caffeine|vlc|okular|feh|libreoffice-impress|libreoffice-avmedia-backend-vlc|python3-cffi-backend"
+FILTER="Priority (required)|ansible|dracut|cpufrequtils|libnss-systemd|libpam-cap|xserver-xorg|openbox|xterm|fonts-droid-fallback|fonts-liberation2|xfonts-base|lightdm|x11-xserver-utils|python3-pyinotify|python3-tornado|libjs-jquery|libjs-bootstrap4|fonts-fork-awesome|caffeine|vlc|okular|feh|libreoffice-impress|libreoffice-avmedia-backend-vlc|python3-cffi-backend|python-apt|exfat-fuse|exfat-utils"
 
 aptly --config=.aptly.conf mirror edit --dep-verbose-resolve --filter="$FILTER" --filter-with-deps raspbian
 aptly --config=.aptly.conf --keyring=`pwd`/trusted.gpg mirror update raspbian
