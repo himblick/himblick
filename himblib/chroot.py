@@ -1,6 +1,7 @@
 from __future__ import annotations
-from typing import List, Union
+from typing import List, Union, Optional
 from contextlib import contextmanager
+from .utils import run
 import tempfile
 import subprocess
 import shutil
@@ -187,6 +188,14 @@ class Chroot:
             with open(dest, "wt") as fd:
                 print(new_line, file=fd)
 
+    @contextmanager
+    def bind_mount(self, chroot, relpath):
+        run(["mount", "--bind", chroot.root, self.abspath(relpath)])
+        try:
+            yield
+        finally:
+            run(["umount", self.abspath(relpath)])
+
 
 class ConfigChroot(Chroot):
     def cleanup_raspbian_boot(self):
@@ -217,32 +226,40 @@ class RootfsChroot(Chroot):
     #            yield
 
     @contextmanager
-    def working_resolvconf(self, relpath: str):
+    def stash_file(self, relpath: str, suffix: Optional[str] = None):
         """
-        Temporarily replace /etc/resolv.conf in the chroot with the current
-        system one
+        Move the given file to a temporary location
         """
         abspath = self.abspath(relpath)
         if os.path.lexists(abspath):
-            fd, tmppath = tempfile.mkstemp(dir=os.path.dirname(abspath))
+            fd, tmppath = tempfile.mkstemp(dir=os.path.dirname(abspath), suffix=suffix)
             os.close(fd)
             os.rename(abspath, tmppath)
-            shutil.copy("/etc/resolv.conf", os.path.join(self.root, "etc/resolv.conf"))
         else:
             tmppath = None
         try:
-            yield
+            yield tmppath
         finally:
             if os.path.lexists(abspath):
                 os.unlink(abspath)
             if tmppath is not None:
                 os.rename(tmppath, abspath)
 
+    @contextmanager
+    def working_resolvconf(self):
+        """
+        Temporarily replace /etc/resolv.conf in the chroot with the current
+        system one
+        """
+        with self.stash_file("/etc/resolv.conf"):
+            shutil.copy("/etc/resolv.conf", self.abspath("/etc/resolvconf"))
+            yield
+
     def systemctl_enable(self, unit: str):
         """
         Enable (and if needed unmask) the given systemd unit
         """
-        with self.working_resolvconf("/etc/resolv.conf"):
+        with self.working_resolvconf():
             env = dict(os.environ)
             env["LANG"] = "C"
             subprocess.run(["systemctl", "--root=" + self.root, "enable", unit], check=True, env=env)
@@ -252,7 +269,7 @@ class RootfsChroot(Chroot):
         """
         Disable (and optionally mask) the given systemd unit
         """
-        with self.working_resolvconf("/etc/resolv.conf"):
+        with self.working_resolvconf():
             env = dict(os.environ)
             env["LANG"] = "C"
             subprocess.run(["systemctl", "--root=" + self.root, "disable", unit], check=True, env=env)
@@ -269,7 +286,7 @@ class RootfsChroot(Chroot):
         if "env" not in kw:
             kw["env"] = dict(os.environ)
             kw["env"]["LANG"] = "C"
-        with self.working_resolvconf("/etc/resolv.conf"):
+        with self.working_resolvconf():
             return subprocess.run(chroot_cmd, check=check, **kw)
 
     def apt_install(self, pkglist: Union[str, List[str]], recommends=False):
@@ -451,6 +468,17 @@ RouteMetric=10
 
         # Run ansible
         self.run(["/srv/himblick/ansible/rootfs.sh"], check=True)
+
+    @contextmanager
+    def replace_apt_source(self, source, keyring):
+        with self.stash_file("/etc/apt/sources.list"):
+            with self.stash_file("/etc/apt/sources.list.d/raspi.list", suffix=".orig"):
+                with self.stash_file("/etc/apt/trusted.gpg"):
+                    with open(self.abspath("/etc/apt/sources.list"), "wt") as fd:
+                        print(source, file=fd)
+                    if keyring:
+                        shutil.copy(keyring, self.abspath("/etc/apt/trusted.gpg"))
+                    yield
 
 
 class MediaChroot(Chroot):

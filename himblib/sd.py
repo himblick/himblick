@@ -3,7 +3,7 @@ from typing import Dict, Any
 from .cmdline import Command, Fail
 from .chroot import Chroot
 from .settings import Settings
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import subprocess
 import json
 import logging
@@ -337,13 +337,15 @@ class SD(Command):
 
     @contextmanager
     def mount_rootfs(self):
-        with self.mounted("boot") as boot:
-            with self.mounted("rootfs") as rootfs:
-                run(["mount", "--bind", boot.root, rootfs.abspath("/boot")])
-                try:
-                    yield rootfs
-                finally:
-                    run(["umount", rootfs.abspath("/boot")])
+        with ExitStack() as stack:
+            boot = stack.enter_context(self.mounted("boot"))
+            rootfs = stack.enter_context(self.mounted("rootfs"))
+            stack.enter_context(rootfs.bind_mount(boot, "/boot"))
+            source = self.settings.provision("apt source")
+            keyring = self.settings.provision("apt keyring")
+            if source:
+                stack.enter_context(rootfs.replace_apt_source(source, keyring))
+            yield rootfs
 
     def setup_rootfs(self):
         with self.mount_rootfs() as chroot:
@@ -357,8 +359,6 @@ class SD(Command):
                 chroot.run(["apt", "update"], check=True)
 
             chroot.run(["apt", "-y", "dist-upgrade"], check=True)
-
-            chroot.setup_readonly_root()
 
             # Generate SSH host keys
             ssh_dir = chroot.abspath("/etc/ssh")
@@ -415,6 +415,8 @@ class SD(Command):
 
             # TODO: take playbook and roles names from config?
             chroot.run_ansible("rootfs.yaml", "roles", playbook_vars)
+
+            chroot.setup_readonly_root()
 
             # Enable the /srv/media mount point, which ansible, as we run it
             # now, is unable to do
