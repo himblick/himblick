@@ -75,11 +75,7 @@ class Player(Command):
 
         self.configure_screen()
 
-        self.web_ui.start_server()
-
-        asyncio.get_event_loop().run_until_complete(self.main_loop())
-        # asyncio.run currently causes tornado not to receive/handle requests
-        # asyncio.run(self.main_loop())
+        asyncio.run(self.main_loop())
 
     async def make_presentation(self):
         # Reload configuration
@@ -108,6 +104,10 @@ class Player(Command):
         return presentation.EmptyPresentation(self.player_settings)
 
     async def main_loop(self):
+        # We need to start the server inside asyncio.run, otherwise it won't
+        # start
+        self.web_ui.start_server()
+
         loop = asyncio.get_event_loop()
         queue = asyncio.Queue()
         monitor = ChangeMonitor(queue, self.args.media)  # noqa
