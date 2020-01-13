@@ -51,6 +51,8 @@ class SD(Command):
                             help="write the filesystem image to the SD device")
         parser.add_argument("--partition", action="store_true",
                             help="update the partition layout")
+        parser.add_argument("--partition-reset", action="store_true",
+                            help="repartition from scratch")
         parser.add_argument("--write-tars", action="store_true",
                             help="repartition and restore contents from tar images")
         parser.add_argument("--setup", action="store", nargs="?", const="all",
@@ -582,6 +584,13 @@ class SD(Command):
             self.umount(dev)
             with self.pause_automounting(dev):
                 self.partition(dev)
+        elif self.args.partition_reset:
+            dev = self.locate()
+            if not self.confirm_operation(dev, "Reset partitioning of"):
+                return 1
+            self.umount(dev)
+            with self.pause_automounting(dev):
+                self.partition_reset(dev)
         elif self.args.write_tars:
             boot_tar = "himblick-part-boot.tar.gz"
             rootfs_tar = "himblick-part-rootfs.tar.gz"
