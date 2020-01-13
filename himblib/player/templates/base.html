@@ -40,6 +40,18 @@
         {% block nav %}
         {% end %}
       </div>
+      {% if is_admin %}
+      <form class="form-inline my-2 my-lg-0" action="." method="POST">
+        <input type="hidden" name="_xsrf" value="{{handler.xsrf_token}}">
+        <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Logout</button>
+      </form>
+      {% else %}
+      <form class="form-inline my-2 my-lg-0" action="." method="POST">
+        <input type="hidden" name="_xsrf" value="{{handler.xsrf_token}}">
+        <input class="form-control mr-sm-2" type="password" name="password" placeholder="Management password" aria-label="Management password">
+        <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Login</button>
+      </form>
+      {% end %}
     </nav>
 
     {% block body %}

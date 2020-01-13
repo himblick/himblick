@@ -59,14 +59,27 @@ class StatusPage(tornado.web.RequestHandler):
             self.ws_url = "wss://" + self.request.host + \
                           self.application.reverse_url("socket")
 
+        is_admin = self.get_secure_cookie("admin") == b"y"
+
         self.render("status.html",
                     title=_("Himblick status"),
+                    is_admin=is_admin,
                     now=time.time(),
                     presentation=self.application.player.current_presentation,
                     format_timestamp=format_timestamp,
                     uptime=runcmd("uptime"),
                     free=runcmd("free", "-h"),
                     systemctl_status=runcmd("systemctl", "--user", "status", "himblick-player.slice"))
+
+    def post(self):
+        password = self.get_body_argument("password", "")
+        if password and password == self.application.player.settings.general("admin password"):
+            log.info("Auth succeeded")
+            self.set_secure_cookie("admin", "y")
+        else:
+            log.info("Auth failed/logout")
+            self.clear_cookie("admin")
+        self.redirect("/")
 
 
 class TopCpuPage(tornado.web.RequestHandler):
@@ -128,12 +141,17 @@ class WebUI(tornado.web.Application):
             url(r"^/status/top-mem$", TopMemPage, name="status_top_mem"),
         ]
 
+        cookie_secret = player.settings.general("cookie secret")
+        if not cookie_secret:
+            import secrets
+            cookie_secret = secrets.token_hex(64)
+
         settings = {
             "template_path": os.path.join(os.path.dirname(__file__), "templates"),
             "static_handler_class": StaticFileHandler,
             "static_path": os.path.join(os.path.dirname(__file__), "static"),
             "xsrf_cookies": True,
-            # "cookie_secret":
+            "cookie_secret": cookie_secret,
         }
 
         super().__init__(
