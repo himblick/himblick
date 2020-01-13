@@ -3,3 +3,6 @@ include LICENSE
 include README.md
 include rootfs.yaml
 recursive-include roles *
+include himblib/player/templates/*
+include himblib/player/static/*
+include himblib/player/static/himblick/*
