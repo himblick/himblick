@@ -11,6 +11,9 @@
         <p class="lead">Management interface for Himblick display <strong>{{handler.application.player.settings.general("name")}}</strong>.</p>
         <hr class="my-4">
         <p>Playing <strong>{{presentation.__class__.__name__}}</strong> since {% raw format_timestamp(presentation.started) %}.</p>
+        {% if handler.application.player.syncers %}
+        <p>Syncing to {% for idx, syncer in enumerate(handler.application.player.syncers) %}{% if idx != 0 %}, {% end %}<a href="http://{{syncer.hostname}}:8018">{{syncer.hostname}}</a>{% end %}<p>
+        {% end %}
       </div>
     </div>
 
