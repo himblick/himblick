@@ -188,6 +188,7 @@ class SD(Command):
         boot = parted.Partition(
                 disk=disk, type=parted.PARTITION_NORMAL, fs=parted.FileSystem(type='fat32', geometry=geometry),
                 geometry=geometry)
+        boot.setFlag(parted.PARTITION_LBA)
         disk.addPartition(partition=boot, constraint=constraint)
 
         # Add 4G ext4 rootfs
