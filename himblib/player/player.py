@@ -6,6 +6,7 @@ from . import presentation
 from .changemonitor import ChangeMonitor
 from .mediadir import MediaDir
 from .server import WebUI
+from .syncer import Syncer
 import re
 import mimetypes
 import os
@@ -41,6 +42,9 @@ class Player(Command):
         self.logo_dir = MediaDir(self.player_settings, os.path.join(self.args.media, "logo"))
         self.web_ui = WebUI(self)
         self.current_presentation = None
+        self.syncers = []
+        for hostname in self.settings.general("replicate to").split():
+            self.syncers.append(Syncer(hostname, self.current_dir))
 
     def configure_screen(self):
         """
@@ -82,10 +86,14 @@ class Player(Command):
         # Look in the media directory
         if self.media_dir.scan():
             self.media_dir.move_assets_to(self.current_dir)
+            for syncer in self.syncers:
+                syncer.rescan()
             return self.current_dir.pres
 
         log.warn("%s: no media found, trying an old current dir", self.media_dir)
         if self.current_dir.scan():
+            for syncer in self.syncers:
+                syncer.rescan()
             return self.current_dir.pres
 
         # If there is no media to play there, look into the 'logo' directory
@@ -124,4 +132,3 @@ class Player(Command):
                     await self.current_presentation.stop()
                 break
             self.current_presentation = None
-
