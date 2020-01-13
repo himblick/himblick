@@ -1,0 +1,3 @@
+#!/bin/sh
+set -ue
+aptly --config=.aptly.conf "$@"
