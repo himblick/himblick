@@ -123,7 +123,7 @@ class SD(Command):
 
         :arg dev: the lsblk data structure for the SD device
         """
-        for part in dev["children"]:
+        for part in dev.get("children", ()):
             mp = part["mountpoint"]
             if not mp:
                 continue
