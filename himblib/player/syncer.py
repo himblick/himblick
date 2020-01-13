@@ -42,7 +42,8 @@ class Syncer:
     async def sync(self, fnames):
         while True:
             try:
-                async with asyncssh.connect(self.hostname, username="media", client_keys=[self.media_key]) as conn:
+                async with asyncssh.connect(
+                        self.hostname, username="media", client_keys=[self.media_key], known_hosts=None) as conn:
                     async with conn.start_sftp_client() as sftp:
                         sources = []
                         for fname in fnames:
