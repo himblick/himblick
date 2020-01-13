@@ -77,7 +77,9 @@ class Player(Command):
 
         self.web_ui.start_server()
 
-        asyncio.run(self.main_loop())
+        asyncio.get_event_loop().run_until_complete(self.main_loop())
+        # asyncio.run currently causes tornado not to receive/handle requests
+        # asyncio.run(self.main_loop())
 
     async def make_presentation(self):
         # Reload configuration
