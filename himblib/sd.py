@@ -172,7 +172,9 @@ class SD(Command):
             startAlign=optimal,
             endAlign=optimal,
             startRange=parted.Geometry(
-                device=device, start=0, end=parted.sizeToSectors(16, "MiB", device.sectorSize)),
+                device=device,
+                start=parted.sizeToSectors(4, "MiB", device.sectorSize),
+                end=parted.sizeToSectors(16, "MiB", device.sectorSize)),
             endRange=parted.Geometry(
                 device=device,
                 start=parted.sizeToSectors(256, "MiB", device.sectorSize),
@@ -238,6 +240,18 @@ class SD(Command):
         disk.addPartition(partition=media, constraint=constraint)
 
         disk.commit()
+        time.sleep(0.5)
+
+        # Fix disk identifier to match what is in cmdline.txt
+        with open(dev["path"], "r+b") as fd:
+            buf = bytearray(512)
+            fd.readinto(buf)
+            buf[0x1B8] = 0x13
+            buf[0x1B9] = 0x6e
+            buf[0x1BA] = 0x58
+            buf[0x1BB] = 0x6c
+            fd.seek(0)
+            fd.write(buf)
         time.sleep(0.5)
 
         # Format boot partition with 'boot' label
