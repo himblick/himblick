@@ -51,6 +51,8 @@ class SD(Command):
                             help="write the filesystem image to the SD device")
         parser.add_argument("--partition", action="store_true",
                             help="update the partition layout")
+        parser.add_argument("--write-tars", action="store_true",
+                            help="repartition and restore contents from tar images")
         parser.add_argument("--setup", action="store", nargs="?", const="all",
                             help="set up the system partition")
         parser.add_argument("--provision", action="store_true",
@@ -148,6 +150,102 @@ class SD(Command):
                         os.fdatasync(fdout.fileno())
                 pbar.finish()
 
+    def partition_reset(self, dev: Dict[str, Any]):
+        """
+        Repartition the SD card from scratch
+        """
+        try:
+            import parted
+        except ModuleNotFoundError:
+            raise Fail("please install python3-parted")
+
+        device = parted.getDevice(dev["path"])
+
+        device.clobber()
+        disk = parted.freshDisk(device, "msdos")
+
+        # Add 256M fat boot
+        optimal = device.optimumAlignment
+        constraint = parted.Constraint(
+            startAlign=optimal,
+            endAlign=optimal,
+            startRange=parted.Geometry(
+                device=device, start=0, end=parted.sizeToSectors(16, "MiB", device.sectorSize)),
+            endRange=parted.Geometry(
+                device=device,
+                start=parted.sizeToSectors(256, "MiB", device.sectorSize),
+                end=parted.sizeToSectors(512, "MiB", device.sectorSize)),
+            minSize=parted.sizeToSectors(256, "MiB", device.sectorSize),
+            maxSize=parted.sizeToSectors(260, "MiB", device.sectorSize))
+        geometry = parted.Geometry(
+            device,
+            start=0,
+            length=parted.sizeToSectors(256, "MiB", device.sectorSize),
+        )
+        geometry = constraint.solveNearest(geometry)
+        boot = parted.Partition(
+                disk=disk, type=parted.PARTITION_NORMAL, fs=parted.FileSystem(type='fat32', geometry=geometry),
+                geometry=geometry)
+        disk.addPartition(partition=boot, constraint=constraint)
+
+        # Add 4G ext4 rootfs
+        constraint = parted.Constraint(
+            startAlign=optimal,
+            endAlign=optimal,
+            startRange=parted.Geometry(
+                device=device,
+                start=geometry.end,
+                end=geometry.end + parted.sizeToSectors(16, "MiB", device.sectorSize)),
+            endRange=parted.Geometry(
+                device=device,
+                start=geometry.end + parted.sizeToSectors(4, "GiB", device.sectorSize),
+                end=geometry.end + parted.sizeToSectors(4.2, "GiB", device.sectorSize)),
+            minSize=parted.sizeToSectors(4, "GiB", device.sectorSize),
+            maxSize=parted.sizeToSectors(4.2, "GiB", device.sectorSize))
+        geometry = parted.Geometry(
+            device,
+            start=geometry.start,
+            length=parted.sizeToSectors(4, "GiB", device.sectorSize),
+        )
+        geometry = constraint.solveNearest(geometry)
+        rootfs = parted.Partition(
+                disk=disk, type=parted.PARTITION_NORMAL, fs=parted.FileSystem(type='ext4', geometry=geometry),
+                geometry=geometry)
+        disk.addPartition(partition=rootfs, constraint=constraint)
+
+        # Add media partition on the rest of the disk
+        constraint = parted.Constraint(
+            startAlign=optimal,
+            endAlign=optimal,
+            startRange=parted.Geometry(
+                device=device,
+                start=geometry.end,
+                end=geometry.end + parted.sizeToSectors(16, "MiB", device.sectorSize)),
+            endRange=parted.Geometry(
+                device=device,
+                start=geometry.end + parted.sizeToSectors(16, "MiB", device.sectorSize),
+                end=disk.maxPartitionLength),
+            minSize=parted.sizeToSectors(4, "GiB", device.sectorSize),
+            maxSize=disk.maxPartitionLength)
+        geometry = constraint.solveMax()
+        # Create media partition
+        media = parted.Partition(
+                disk=disk, type=parted.PARTITION_NORMAL,
+                geometry=geometry)
+        disk.addPartition(partition=media, constraint=constraint)
+
+        disk.commit()
+        time.sleep(0.5)
+
+        # Format boot partition with 'boot' label
+        run(["mkfs.fat", "-F", "32", "-n", "boot", disk.partitions[0].path])
+
+        # Format rootfs partition with 'rootfs' label
+        run(["mkfs.ext4", "-F", "-L", "rootfs", disk.partitions[1].path])
+
+        # Format exfatfs partition with 'media' label
+        run(["mkexfatfs", "-n", "media", disk.partitions[2].path])
+
     def partition(self, dev: Dict[str, Any]):
         """
         Update partitioning on the SD card
@@ -161,6 +259,8 @@ class SD(Command):
         # for pyparted examples
         # See https://www.gnu.org/software/parted/api/modules.html
         # for library documentation
+        # See http://www.linuxvoice.com/issues/005/pyparted.pdf
+        # for more exmaples and in-depth explanations
 
         device = parted.getDevice(dev["path"])
         disk = parted.newDisk(device)
@@ -262,7 +362,7 @@ class SD(Command):
                 log.info("Reenabling dir_index on %s", part["path"])
                 run(["tune2fs", "-O", "dir_index", part["path"]])
                 log.info("Running e2fsck to reindex directories on %s", part["path"])
-                run(["e2fsck", "-f", part["path"]])
+                run(["e2fsck", "-fy", part["path"]])
 
     @contextmanager
     def mounted(self, label):
@@ -482,6 +582,25 @@ class SD(Command):
             self.umount(dev)
             with self.pause_automounting(dev):
                 self.partition(dev)
+        elif self.args.write_tars:
+            boot_tar = "himblick-part-boot.tar.gz"
+            rootfs_tar = "himblick-part-rootfs.tar.gz"
+            if not os.path.exists(boot_tar):
+                raise Fail(f"{boot_tar} not found")
+            if not os.path.exists(rootfs_tar):
+                raise Fail(f"{rootfs_tar} not found")
+
+            dev = self.locate()
+            if not self.confirm_operation(dev, "Reset partitioning of"):
+                return 1
+            self.umount(dev)
+            with self.pause_automounting(dev):
+                self.partition_reset(dev)
+
+                with self.mounted("boot") as chroot:
+                    run(["tar", "-C", chroot.root, "--no-same-owner", "--no-same-permissions", "-axf", boot_tar])
+                with self.mounted("rootfs") as chroot:
+                    run(["tar", "-C", chroot.root, "-axf", rootfs_tar])
         elif self.args.setup:
             dev = self.locate()
             self.umount(dev)
