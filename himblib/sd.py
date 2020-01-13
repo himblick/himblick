@@ -243,7 +243,7 @@ class SD(Command):
         run(["mkfs.fat", "-F", "32", "-n", "boot", disk.partitions[0].path])
 
         # Format rootfs partition with 'rootfs' label
-        run(["mkfs.ext4", "-F", "-L", "rootfs", disk.partitions[1].path])
+        run(["mkfs.ext4", "-F", "-L", "rootfs", "-O", "^64bit,^huge_file,^metadata_csum", disk.partitions[1].path])
 
         # Format exfatfs partition with 'media' label
         run(["mkexfatfs", "-n", "media", disk.partitions[2].path])
