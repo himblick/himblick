@@ -48,28 +48,47 @@ def runcmd(*cmd):
     return res.stdout
 
 
-class StatusPage(tornado.web.RequestHandler):
+class BaseHandler(tornado.web.RequestHandler):
+    def prepare(self):
+        self.is_admin = self.get_secure_cookie("admin") == b"y"
+
+    def get_template_namespace(self):
+        res = super().get_template_namespace()
+
+        if self.request.protocol == "http":
+            res["ws_url"] = "ws://" + self.request.host + \
+                          self.application.reverse_url("socket")
+        else:
+            res["ws_url"] = "wss://" + self.request.host + \
+                          self.application.reverse_url("socket")
+
+        res["now"] = time.time()
+        res["presentation"] = self.application.player.current_presentation
+        res["format_timestamp"] = format_timestamp
+        res["is_admin"] = self.is_admin
+
+        return res
+
+
+class MainPage(BaseHandler):
     def get(self):
         _ = self.locale.translate
 
-        if self.request.protocol == "http":
-            self.ws_url = "ws://" + self.request.host + \
-                          self.application.reverse_url("socket")
-        else:
-            self.ws_url = "wss://" + self.request.host + \
-                          self.application.reverse_url("socket")
+        uploaded_media = []
+        media_dir = self.application.player.media_dir.path
+        for de in os.scandir(media_dir):
+            if de.is_dir():
+                continue
+            if de.name in ("current", "previus", "logo", "himblick.conf", "remove-when-done"):
+                continue
+            if de.name.startswith("."):
+                continue
+            uploaded_media.append(de.name)
+        uploaded_media.sort()
 
-        is_admin = self.get_secure_cookie("admin") == b"y"
-
-        self.render("status.html",
-                    title=_("Himblick status"),
-                    is_admin=is_admin,
-                    now=time.time(),
-                    presentation=self.application.player.current_presentation,
-                    format_timestamp=format_timestamp,
-                    uptime=runcmd("uptime"),
-                    free=runcmd("free", "-h"),
-                    systemctl_status=runcmd("systemctl", "--user", "status", "himblick-player.slice"))
+        self.render("main.html",
+                    title=_("Himblick"),
+                    uploaded_media=uploaded_media)
 
     def post(self):
         password = self.get_body_argument("password", "")
@@ -82,42 +101,57 @@ class StatusPage(tornado.web.RequestHandler):
         self.redirect("/")
 
 
-class TopCpuPage(tornado.web.RequestHandler):
+class StatusPage(BaseHandler):
     def get(self):
         _ = self.locale.translate
 
-        if self.request.protocol == "http":
-            self.ws_url = "ws://" + self.request.host + \
-                          self.application.reverse_url("socket")
-        else:
-            self.ws_url = "wss://" + self.request.host + \
-                          self.application.reverse_url("socket")
+        self.render("status.html",
+                    title=_("Himblick status"),
+                    uptime=runcmd("uptime"),
+                    free=runcmd("free", "-h"),
+                    systemctl_status=runcmd("systemctl", "--user", "status", "himblick-player.slice"))
+
+
+class TopCpuPage(BaseHandler):
+    def get(self):
+        _ = self.locale.translate
 
         self.render("top.html",
                     title=_("Himblick status - CPU top"),
-                    now=time.time(),
-                    presentation=self.application.player.current_presentation,
-                    format_timestamp=format_timestamp,
                     top=runcmd("top", "-b", "-n", "1", "-o", "%CPU", "-w", "512"))
 
 
-class TopMemPage(tornado.web.RequestHandler):
+class TopMemPage(BaseHandler):
     def get(self):
         _ = self.locale.translate
 
-        if self.request.protocol == "http":
-            self.ws_url = "ws://" + self.request.host + \
-                          self.application.reverse_url("socket")
-        else:
-            self.ws_url = "wss://" + self.request.host + \
-                          self.application.reverse_url("socket")
-
         self.render("top.html",
                     title=_("Himblick status - MEM top"),
-                    now=time.time(),
-                    presentation=self.application.player.current_presentation,
-                    format_timestamp=format_timestamp,
                     top=runcmd("top", "-b", "-n", "1", "-o", "%MEM", "-w", "512"))
+
+
+class MediaUpload(BaseHandler):
+    def post(self):
+        if not self.is_admin:
+            self.send_error(403)
+            return
+        # _ = self.locale.translate
+        media_dir = self.application.player.media_dir.path
+        for name, files in self.request.files.items():
+            for f in files:
+                name = os.path.basename(f["filename"])
+                with open(os.path.join(media_dir, name), "wb") as fd:
+                    fd.write(f.body)
+        self.finish("OK")
+
+
+class MediaActivate(BaseHandler):
+    def post(self):
+        if not self.is_admin:
+            self.send_error(403)
+            return
+        self.application.player.command_queue.put_nowait("rescan")
+        self.redirect("/")
 
 
 class WebLoggingHandler(logging.Handler):
@@ -136,9 +170,12 @@ class WebUI(tornado.web.Application):
     def __init__(self, player: Player):
         urls = [
             url(r"/_server/websocket", Socket, name="socket"),
-            url(r"^/$", StatusPage, name="status"),
+            url(r"^/$", MainPage, name="main"),
+            url(r"^/status$", StatusPage, name="status"),
             url(r"^/status/top-cpu$", TopCpuPage, name="status_top_cpu"),
             url(r"^/status/top-mem$", TopMemPage, name="status_top_mem"),
+            url(r"^/media/upload$", MediaUpload, name="media_upload"),
+            url(r"^/media/activate$", MediaActivate, name="media_activate"),
         ]
 
         cookie_secret = player.settings.general("cookie secret")

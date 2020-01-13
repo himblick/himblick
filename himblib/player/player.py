@@ -45,6 +45,7 @@ class Player(Command):
         self.syncers = []
         for hostname in self.settings.general("replicate to").split():
             self.syncers.append(Syncer(hostname, self.current_dir))
+        self.command_queue = None
 
     def configure_screen(self):
         """
@@ -109,20 +110,20 @@ class Player(Command):
         self.web_ui.start_server()
 
         loop = asyncio.get_event_loop()
-        queue = asyncio.Queue()
-        monitor = ChangeMonitor(queue, self.args.media)  # noqa
+        self.command_queue = asyncio.Queue()
+        monitor = ChangeMonitor(self.command_queue, self.args.media)  # noqa
 
         def do_terminate():
-            queue.put_nowait("quit")
+            self.command_queue.put_nowait("quit")
 
         loop.add_signal_handler(signal.SIGINT, do_terminate)
         loop.add_signal_handler(signal.SIGTERM, do_terminate)
 
         while True:
             self.current_presentation = await self.make_presentation()
-            asyncio.create_task(self.current_presentation.run(queue))
+            asyncio.create_task(self.current_presentation.run(self.command_queue))
             self.web_ui.trigger_reload()
-            cmd = await queue.get()
+            cmd = await self.command_queue.get()
             log.info("Queue command: %s", cmd)
             if cmd == "rescan":
                 if self.current_presentation.is_running():

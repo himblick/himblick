@@ -10,6 +10,9 @@
 
     <link rel="stylesheet" href="{{static_url('fork-awesome/css/fork-awesome.css')}}">
 
+    <script src="{{static_url('libjs-dropzone/dropzone.min.js')}}"></script>
+    <link rel="stylesheet" href="{{static_url('libjs-dropzone/dropzone.css')}}">
+
     <script type="text/javascript">
     (function() {
     "use strict";
@@ -17,7 +20,7 @@
     window.himblick = {};
 
     window.himblick.config = {
-        socket: "{{handler.ws_url}}",
+        socket: "{{ws_url}}",
         xsrf_token: "{{handler.xsrf_token}}",
     }
 
@@ -32,21 +35,33 @@
   </head>
   <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-      <a class="navbar-brand" href="{{reverse_url('status')}}">Himblick</a>
+      <a class="navbar-brand" href="{{reverse_url('main')}}">Himblick</a>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navbarNavDropdown">
+        <ul class="navbar-nav mr-auto">
         {% block nav %}
+         <li class="nav-item dropdown">
+           <a class="nav-link dropdown-toggle" href="#" id="navbarMonitor" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+             Monitor
+           </a>
+           <div class="dropdown-menu" aria-labelledby="navbarMonitor">
+             <a class="dropdown-item" href="{{reverse_url('status')}}">Status</a>
+             <a class="dropdown-item" href="{{reverse_url('status_top_cpu')}}">CPU top</a>
+             <a class="dropdown-item" href="{{reverse_url('status_top_mem')}}">MEM top</a>
+           </div>
+         </li>
         {% end %}
+        </ul>
       </div>
       {% if is_admin %}
-      <form class="form-inline my-2 my-lg-0" action="." method="POST">
+      <form class="form-inline my-2 my-lg-0" action="{{reverse_url('main')}}" method="POST">
         <input type="hidden" name="_xsrf" value="{{handler.xsrf_token}}">
         <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Logout</button>
       </form>
       {% else %}
-      <form class="form-inline my-2 my-lg-0" action="." method="POST">
+      <form class="form-inline my-2 my-lg-0" action="{{reverse_url('main')}}" method="POST">
         <input type="hidden" name="_xsrf" value="{{handler.xsrf_token}}">
         <input class="form-control mr-sm-2" type="password" name="password" placeholder="Management password" aria-label="Management password">
         <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Login</button>
@@ -55,6 +70,20 @@
     </nav>
 
     {% block body %}
+    {% end %}
+
+    {% block footer %}
+    <div class="card hidden-print mt-3">
+      <div class="card-body">
+        <div class="row">
+          <div class="col-sm">
+            <small><a href="https://github.com/himblick/himblick">himblick</a></small>
+          </div>
+          <div class="col-sm text-right">
+            <small>{% raw format_timestamp(now) %}</small>
+          </div>
+      </div>
+    </div>
     {% end %}
   </body>
 </html>

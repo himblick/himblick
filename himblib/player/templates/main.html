@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block body %}
+
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-sm">
+
+      <div class="jumbotron mt-3">
+        <h1 class="display-4">{{title}}</h1>
+        <p class="lead">Management interface for Himblick display <strong>{{handler.application.player.settings.general("name")}}</strong>.</p>
+        <hr class="my-4">
+        <p>Playing <strong>{{presentation.__class__.__name__}}</strong> since {% raw format_timestamp(presentation.started) %}.</p>
+      </div>
+    </div>
+
+    <div class="col-sm">
+      {% if is_admin %}
+      <div class="card mt-3">
+        <div class="card-header">
+          Upload media
+        </div>
+        <div class="card-body">
+          <script type="text/javascript">
+          Dropzone.options.mediaUpload = {
+            maxFilesize: 100, // MB
+            queuecomplete: () => { window.location.reload(true); },
+          };
+          </script>
+
+          <form action="{{reverse_url("media_upload")}}"
+                class="dropzone"
+                id="media_upload">
+            <input type="hidden" name="_xsrf" value="{{handler.xsrf_token}}">
+          </form>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header">
+          Uploaded media
+        </div>
+        <ul class="list-group list-group-flush">
+          {% for name in uploaded_media %}
+          <li class="list-group-item">{{name}}</li>
+          {% end %}
+          <li class="list-group-item">
+            <form action="{{reverse_url("media_activate")}}" method="post">
+              <input type="hidden" name="_xsrf" value="{{handler.xsrf_token}}">
+              <button class="btn btn-primary" type="submit">Activate</button>
+            </form>
+          </li>
+        </ul>
+      </div>
+      {% end %}
+
+      <div class="card mt-3">
+        <div class="card-header">
+          Current media
+        </div>
+        <ul class="list-group list-group-flush">
+          {% for name in presentation.get_files() %}
+          <li class="list-group-item">{{name}}</li>
+          {% end %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% end %}
+

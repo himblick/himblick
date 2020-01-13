@@ -53,6 +53,7 @@
        - python3-asyncssh
        - libjs-jquery
        - libjs-bootstrap4
+       - libjs-dropzone
        - fonts-fork-awesome
        - caffeine
        - vlc
