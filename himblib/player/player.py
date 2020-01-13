@@ -73,7 +73,7 @@ class Player(Command):
 
         self.web_ui.start_server()
 
-        asyncio.get_event_loop().run_until_complete(self.main_loop())
+        asyncio.run(self.main_loop())
 
     async def make_presentation(self):
         # Reload configuration
