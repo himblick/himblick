@@ -470,11 +470,11 @@ class SD(Command):
                 if fn.startswith("ssh_host_") and fn.endswith("_key"):
                     os.unlink(os.path.join(ssh_dir, fn))
             # Install or generate new ones
-            if not self.settings.SSH_HOST_KEYS:
+            if not self.settings.provision("ssh host keys"):
                 # Generate new ones
                 run(["ssh-keygen", "-A", "-f", chroot.root])
             else:
-                run(["tar", "-C", ssh_dir, "-axf", self.settings.SSH_HOST_KEYS])
+                run(["tar", "-C", ssh_dir, "-axf", self.settings.provision("ssh host keys")])
 
             # Install our own package
             if not os.path.exists(self.settings.HIMBLICK_PACKAGE):

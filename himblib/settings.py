@@ -77,10 +77,6 @@ class Settings:
         return self.provision("base image")
 
     @property
-    def SSH_HOST_KEYS(self):
-        return self.provision("ssh host keys")
-
-    @property
     def SSH_AUTHORIZED_KEY(self):
         return self.provision("ssh authorized key")
 
