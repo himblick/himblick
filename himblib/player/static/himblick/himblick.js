@@ -61,6 +61,8 @@ function main()
         } if (evt.detail.event == "uploaded_media_changed") {
             console.debug("Uploaded media changed");
             let ul = document.getElementById("uploaded_media");
+            if (!ul)
+                return;
             while (ul.lastChild)
                 ul.lastChild.remove();
             for (let fname of evt.detail.files)
