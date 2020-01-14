@@ -63,6 +63,21 @@ def runcmd(*cmd):
     return res.stdout
 
 
+def get_uploaded_media(player):
+    uploaded_media = []
+    media_dir = player.media_dir.path
+    for de in os.scandir(media_dir):
+        if de.is_dir():
+            continue
+        if de.name in ("current", "previus", "logo", "himblick.conf", "remove-when-done"):
+            continue
+        if de.name.startswith("."):
+            continue
+        uploaded_media.append(de.name)
+    uploaded_media.sort()
+    return uploaded_media
+
+
 class BaseHandler(tornado.web.RequestHandler):
     def prepare(self):
         self.is_admin = self.get_secure_cookie("admin") == b"y"
@@ -89,21 +104,9 @@ class MainPage(BaseHandler):
     def get(self):
         _ = self.locale.translate
 
-        uploaded_media = []
-        media_dir = self.application.player.media_dir.path
-        for de in os.scandir(media_dir):
-            if de.is_dir():
-                continue
-            if de.name in ("current", "previus", "logo", "himblick.conf", "remove-when-done"):
-                continue
-            if de.name.startswith("."):
-                continue
-            uploaded_media.append(de.name)
-        uploaded_media.sort()
-
         self.render("main.html",
                     title=_("Himblick"),
-                    uploaded_media=uploaded_media)
+                    uploaded_media=get_uploaded_media(self.application.player))
 
     def post(self):
         password = self.get_body_argument("password", "")
@@ -157,6 +160,10 @@ class MediaUpload(BaseHandler):
                 name = os.path.basename(f["filename"])
                 with open(os.path.join(media_dir, name), "wb") as fd:
                     fd.write(f.body)
+        self.application.send_ws_message({
+            "event": "uploaded_media_changed",
+            "files": get_uploaded_media(self.application.player),
+        })
         self.finish("OK")
 
 
@@ -225,7 +232,10 @@ class WebUI(tornado.web.Application):
 
     def trigger_reload(self):
         log.info("Content change detected: reloading site")
-        payload = json.dumps({"event": "reload"})
+        self.send_ws_message({"event": "reload"})
+
+    def send_ws_message(self, data):
+        payload = json.dumps(data)
         for handler in self.sockets:
             handler.write_message(payload)
 

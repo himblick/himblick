@@ -58,6 +58,18 @@ function main()
         {
             console.debug("Reloading page");
             window.location.reload(true);
+        } if (evt.detail.event == "uploaded_media_changed") {
+            console.debug("Uploaded media changed");
+            let ul = document.getElementById("uploaded_media");
+            while (ul.lastChild)
+                ul.lastChild.remove();
+            for (let fname of evt.detail.files)
+            {
+                let li = document.createElement("li");
+                li.setAttribute("class", "list-group-item");
+                li.textContent = fname;
+                ul.append(li);
+            }
         } else {
             console.log("Unknown event received", evt.detail);
         }

@@ -27,7 +27,7 @@
           <script type="text/javascript">
           Dropzone.options.mediaUpload = {
             maxFilesize: 100, // MB
-            queuecomplete: () => { window.location.reload(true); },
+            // queuecomplete: () => { window.location.reload(true); },
           };
           </script>
 
@@ -43,17 +43,15 @@
         <div class="card-header">
           Uploaded media
         </div>
-        <ul class="list-group list-group-flush">
+        <ul class="list-group list-group-flush" id="uploaded_media">
           {% for name in uploaded_media %}
           <li class="list-group-item">{{name}}</li>
           {% end %}
-          <li class="list-group-item">
-            <form action="{{reverse_url("media_activate")}}" method="post">
-              <input type="hidden" name="_xsrf" value="{{handler.xsrf_token}}">
-              <button class="btn btn-primary" data-command="reload_media" type="submit">Activate</button>
-            </form>
-          </li>
         </ul>
+        <form class="card-body" action="{{reverse_url("media_activate")}}" method="post">
+          <input type="hidden" name="_xsrf" value="{{handler.xsrf_token}}">
+          <button class="btn btn-primary" data-command="reload_media" type="submit">Activate</button>
+        </form>
       </div>
       {% end %}
 
