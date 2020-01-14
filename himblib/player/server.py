@@ -25,6 +25,9 @@ log = logging.getLogger("serve")
 
 
 class Socket(tornado.websocket.WebSocketHandler):
+    def prepare(self):
+        self.is_admin = self.get_secure_cookie("admin") == b"y"
+
     def open(self):
         log.debug("WebSocket connection opened")
         self.application.add_socket(self)
