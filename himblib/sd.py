@@ -478,9 +478,11 @@ class SD(Command):
             self.restore_apt_cache(chroot)
 
             # Update apt cache
-            apt_cache = chroot.abspath("/var/cache/apt/pkgcache.bin")
-            if not os.path.exists(apt_cache) or time.time() - os.path.getmtime(apt_cache) > 86400:
-                chroot.run(["apt", "update"], check=True)
+            # apt_cache = chroot.abspath("/var/cache/apt/pkgcache.bin")
+            # if not os.path.exists(apt_cache) or time.time() - os.path.getmtime(apt_cache) > 86400:
+            #     chroot.run(["apt", "update"], check=True)
+            # Update always, since now we have a local mirror
+            chroot.run(["apt", "update"], check=True)
 
             chroot.run(["apt", "-y", "dist-upgrade"], check=True)
 
