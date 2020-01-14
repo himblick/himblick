@@ -50,7 +50,7 @@
           <li class="list-group-item">
             <form action="{{reverse_url("media_activate")}}" method="post">
               <input type="hidden" name="_xsrf" value="{{handler.xsrf_token}}">
-              <button class="btn btn-primary" type="submit">Activate</button>
+              <button class="btn btn-primary" data-command="reload_media" type="submit">Activate</button>
             </form>
           </li>
         </ul>

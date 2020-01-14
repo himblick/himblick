@@ -33,7 +33,19 @@ class Socket(tornado.websocket.WebSocketHandler):
         self.application.add_socket(self)
 
     def on_message(self, message):
-        log.debug("WebSocket message received: %r", message)
+        try:
+            data = json.loads(message)
+        except Exception as e:
+            log.warn("Cannot decode incoming ws message %r: %s", message, e)
+            return
+
+        command = data.get("command")
+        if command is None:
+            return
+
+        if self.is_admin:
+            if command == "reload_media":
+                self.application.player.command_queue.put_nowait("rescan")
 
     def on_close(self):
         log.debug("WebSocket connection closed")

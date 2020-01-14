@@ -42,6 +42,11 @@ class HimblickSocket
         });
         document.dispatchEvent(new_evt);
     }
+
+    send(data) {
+        const msg = JSON.stringify(data);
+        this.socket.send(msg);
+    }
 }
 
 function main()
@@ -56,6 +61,18 @@ function main()
         } else {
             console.log("Unknown event received", evt.detail);
         }
+    });
+
+    document.addEventListener("click", evt => {
+        const ds = evt.target.dataset;
+        if (!ds)
+            return;
+        const command = ds.command;
+        if (!command)
+            return;
+        evt.preventDefault();
+
+        window.himblick.socket.send(ds);
     });
 }
 
