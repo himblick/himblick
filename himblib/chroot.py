@@ -374,7 +374,7 @@ RouteMetric=20
 Name=eth0
 
 [Network]
-DHCP=all
+DHCP=ipv4
 
 [DHCP]
 RouteMetric=10
