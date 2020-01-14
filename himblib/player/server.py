@@ -239,18 +239,17 @@ class WebUI(tornado.web.Application):
         for handler in self.sockets:
             handler.write_message(payload)
 
-    def start_server(self, host="0.0.0.0", port=8018):
+    def start_server(self, host=None, port=8018):
         sockets = tornado.netutil.bind_sockets(port, host)
         pairs = []
         for s in sockets:
             pairs.append(s.getsockname()[:2])
         pairs.sort()
-        host, port = pairs[0]
-
-        if ":" in host:
-            host = f"[{host}]"
-        server_url = f"http://{host}:{port}"
-        log.info("Serving on %s", server_url)
+        for host, port in pairs:
+            if ":" in host:
+                host = f"[{host}]"
+            server_url = f"http://{host}:{port}"
+            log.info("Serving on %s", server_url)
 
         server = tornado.httpserver.HTTPServer(self)
         server.add_sockets(sockets)
