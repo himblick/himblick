@@ -414,12 +414,6 @@ class SD(Command):
                 if "fsck.mode=skip" not in parts:
                     parts.append("fsck.mode=skip")
 
-            # Add hdmi_force_hotplug=1 to config.txt to allow booting even if
-            # HDMI is unplugged
-            with chroot.edit_text_file("/config.txt") as lines:
-                if "hdmi_force_hotplug=1" not in lines:
-                    lines.append("hdmi_force_hotplug=1")
-
     def save_apt_cache(self, chroot: Chroot):
         """
         Copy .deb files from the apt cache in the rootfs to our local cache
