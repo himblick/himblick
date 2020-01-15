@@ -518,6 +518,11 @@ class SD(Command):
             # Do not wait for being online to finish boot
             chroot.systemctl_disable("systemd-networkd-wait-online.service", mask=True)
 
+            # Disable apt update/upgrade timers, to prevent unstable raspbian
+            # updates to break the system until reset at next reboot
+            chroot.systemctl_disable("apt-daily.timer", mask=True)
+            chroot.systemctl_disable("apt-daily-upgrade.timer", mask=True)
+
             # Vars to pass to the ansible playbook
             playbook_vars = {
             }
