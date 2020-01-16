@@ -614,8 +614,8 @@ class SD(Command):
             with self.pause_automounting(dev):
                 self.partition_reset(dev)
         elif self.args.write_tars:
-            boot_tar = "himblick-part-boot.tar.gz"
-            rootfs_tar = "himblick-part-rootfs.tar.gz"
+            boot_tar = "images/himblick-part-boot.tar.gz"
+            rootfs_tar = "images/himblick-part-rootfs.tar.gz"
             if not os.path.exists(boot_tar):
                 raise Fail(f"{boot_tar} not found")
             if not os.path.exists(rootfs_tar):
