@@ -88,7 +88,7 @@ class SD(Command):
                          dev["path"], dev["vendor"], dev["model"], dev["serial"],
                          format_gb(int(dev["size"])))
         if not devs:
-            raise Fail("No candidate SD cards found")
+            raise Fail("No candidate SD cards found, try using --dev")
         if len(devs) > 1:
             raise Fail(f"{len(devs)} SD cards found")
         return devs[0]
