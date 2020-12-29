@@ -56,7 +56,8 @@ class SD(Command):
         parser.add_argument("--partition-reset", action="store_true",
                             help="repartition from scratch")
         parser.add_argument("--write-tars", action="store_true",
-                            help="repartition and restore contents from tar images")
+                            help="repartition and restore contents from tar images,"
+                                 " then provision boot and media partitions *only*")
         parser.add_argument("--setup", action="store", nargs="?", const="all",
                             help="set up the system partition")
         parser.add_argument("--provision", action="store_true",
