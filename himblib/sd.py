@@ -639,6 +639,9 @@ class SD(Command):
                     run(["tar", "-C", chroot.root, "--no-same-owner", "--no-same-permissions", "-axf", boot_tar])
                 with self.mounted("rootfs") as chroot:
                     run(["tar", "-C", chroot.root, "-axf", rootfs_tar])
+
+                self.setup_boot()
+                self.setup_media()
         elif self.args.setup:
             dev = self.locate()
             self.umount(dev)
