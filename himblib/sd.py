@@ -43,6 +43,8 @@ class SD(Command):
                             help="do not ask for confirmation before destructive operations")
         parser.add_argument("--shell", action="store_true",
                             help="open a shell inside the rootfs")
+        parser.add_argument("--dev", action="store",
+                            help="override SD device autodetection and use this device")
         parser.add_argument("--locate", action="store_true",
                             help="locate the device where the SD image is present")
         parser.add_argument("--umount", action="store_true",
@@ -75,7 +77,12 @@ class SD(Command):
         res = json.loads(res.stdout)
         devs = []
         for dev in res["blockdevices"]:
-            if dev["rm"] and not dev["ro"] and dev["type"] == "disk" and dev["tran"] == "usb":
+            if self.args.dev and dev["path"] == self.args.dev:
+                devs.append(dev)
+                log.info("--dev path %s matches %s %s %s %s",
+                         self.args.dev, dev["vendor"], dev["model"], dev["serial"],
+                         format_gb(int(dev["size"])))
+            elif dev["rm"] and not dev["ro"] and dev["type"] == "disk" and dev["tran"] == "usb":
                 devs.append(dev)
                 log.info("Found %s: %s %s %s %s",
                          dev["path"], dev["vendor"], dev["model"], dev["serial"],
