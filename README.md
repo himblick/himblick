@@ -18,5 +18,5 @@ apt install python3-parted python3-progressbar exfat-utils \
 For player:
 
 ```
-apt install python3-pyinotify
+apt install python3-pyinotify python3-tornado
 ```
